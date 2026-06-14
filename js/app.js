@@ -114,14 +114,15 @@ function selectedMatch() {
   return state.matches.find((m) => m.id === state.selectedId) || null;
 }
 
-// Pick the standings group containing the selected match's teams (else all).
+// Show only the single group that contains BOTH teams (group stage). If there
+// isn't one (e.g. a knockout match), show no table.
 function groupsForMatch(groups, m) {
   const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
   const hn = norm(m.home.name);
   const an = norm(m.away.name);
-  const has = (g) => g.rows.some((r) => { const t = norm(r.team); return t === hn || t === an; });
-  const hit = groups.find(has);
-  return hit ? [hit] : groups;
+  const teams = (g) => g.rows.map((r) => norm(r.team));
+  const hit = groups.find((g) => { const t = teams(g); return t.includes(hn) && t.includes(an); });
+  return hit ? [hit] : [];
 }
 
 // ---- goal alerts -----------------------------------------------------------
