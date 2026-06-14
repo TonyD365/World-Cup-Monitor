@@ -28,17 +28,17 @@ const state = {
 };
 
 // Build the match-clock string shown above the score.
-// States (as requested): 未开赛 / 中场休息 / 补水时间 / 45:00 (+x) / 90:00 (+x) / 结束了
+// States: NOT STARTED / HALF TIME / COOLING BREAK / 45:00 (+x) / 90:00 (+x) / FULL TIME
 function clockText(m) {
   if (!m) return '';
-  if (m.status === 'pre') return '未开赛';
-  if (m.status === 'ft') return '结束了';
+  if (m.status === 'pre') return 'NOT STARTED';
+  if (m.status === 'ft') return 'FULL TIME';
   const period = String(m.period || '');
   const p = period.toLowerCase();
   // Half-time (HT, no running minute).
-  if (/\bht\b|half[\s-]?time/.test(p) && !/\d/.test(p)) return '中场休息';
+  if (/\bht\b|half[\s-]?time/.test(p) && !/\d/.test(p)) return 'HALF TIME';
   // Cooling / water break.
-  if (/cool|water|drink|break/.test(p)) return '补水时间';
+  if (/cool|water|drink|break/.test(p)) return 'COOLING BREAK';
   // Stoppage / added time: period like "45'+2'" or "90'+3'".
   const stop = /(\d+)\s*'?\s*\+\s*(\d+)/.exec(period);
   if (stop) {
@@ -47,7 +47,7 @@ function clockText(m) {
     return `${anchor}:00 (+${stop[2]})`;
   }
   // Normal live: tick MM:SS from the last synced minute.
-  if (m.minute == null) return '进行中';
+  if (m.minute == null) return 'LIVE';
   const secs = Math.floor((Date.now() - state.clockSyncedAt) / 1000);
   let total = m.minute * 60 + Math.max(0, Math.min(secs, 600));
   const cap = m.minute <= 45 ? 45 * 60 : 90 * 60;
