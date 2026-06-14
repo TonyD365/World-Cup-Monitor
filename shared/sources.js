@@ -384,13 +384,16 @@ export async function fetchOpenfootball(fetchImpl) {
       const away = m.team2 || (m.away && m.away.name) || '';
       // Skip bracket placeholders like "2A", "W73", "L101", "3A/B/C".
       if (isPlaceholderTeam(home) || isPlaceholderTeam(away)) continue;
-      // openfootball's `time` can carry a timezone suffix ("12:00 UTC-5:00");
-      // extract just HH:MM and treat the date as the calendar day.
+      // openfootball's `time` carries the venue's UTC offset ("12:00 UTC-5:00").
+      // Parse both the HH:MM and the offset so the instant is correct; the UI
+      // then converts it to the viewer's local timezone.
       let kickoff = null;
       if (m.date) {
         const hm = /(\d{1,2}):(\d{2})/.exec(m.time || '');
         const time = hm ? `${hm[1].padStart(2, '0')}:${hm[2]}` : '00:00';
-        kickoff = `${m.date}T${time}:00Z`;
+        const off = /UTC\s*([+-])(\d{1,2})(?::?(\d{2}))?/i.exec(m.time || '');
+        const tz = off ? `${off[1]}${off[2].padStart(2, '0')}:${off[3] || '00'}` : 'Z';
+        kickoff = `${m.date}T${time}:00${tz}`;
       }
       const sc = m.score && m.score.ft;
       out.push({
