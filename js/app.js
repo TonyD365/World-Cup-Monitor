@@ -14,6 +14,7 @@ import {
   renderLineups,
   renderStats,
   renderTable,
+  renderTeamSummary,
 } from './render.js';
 
 const state = {
@@ -62,8 +63,10 @@ function renderClock() {
   if (!elc) return;
   const m = selectedMatch();
   const txt = clockText(m);
-  elc.textContent = txt;
-  elc.className = 'sb-clock' + (m && m.status === 'live' ? ' live' : '');
+  // Only touch the DOM when the value changes (avoids needless mutations).
+  if (elc.textContent !== txt) elc.textContent = txt;
+  const cls = 'sb-clock' + (m && m.status === 'live' ? ' live' : '');
+  if (elc.className !== cls) elc.className = cls;
 }
 
 function selectedMatch() {
@@ -122,6 +125,7 @@ async function poll() {
     state.clockSyncedAt = Date.now();
     renderScoreboard(m);
     renderClock();
+    renderTeamSummary(m, state.detail);
     renderEventLog(m, state.shownKeys);
     renderActiveTab();
     setLastPoll(new Date());
@@ -164,6 +168,7 @@ function init() {
     renderMatchStrip(state.matches, state.selectedId);
     renderScoreboard(selectedMatch());
     renderClock();
+    renderTeamSummary(selectedMatch(), state.detail);
     renderEventLog(selectedMatch(), state.shownKeys);
     renderActiveTab();
     poll(); // fetch detail for the newly selected match right away

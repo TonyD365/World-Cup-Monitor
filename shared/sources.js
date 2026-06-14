@@ -163,26 +163,31 @@ function parseEspnEvents(data) {
   const sides = teamSides(data);
   const out = [];
   const seen = new Set();
-  const add = (min, typeTxt, teamId, player, detail) => {
+  const add = (min, typeTxt, teamId, player, detail, assist = '') => {
     const type = espnEventType(typeTxt || detail || '');
     const key = `${min}|${type}|${player}|${(detail || '').slice(0, 40)}`;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ min, type, team: teamLabel(sides, teamId), player, detail: detail || typeTxt || '', source: 'espn' });
+    out.push({
+      min, type, team: teamLabel(sides, teamId), player, assist,
+      detail: detail || typeTxt || '', source: 'espn',
+    });
   };
 
   // keyEvents: structured goals/cards/subs (use boolean flags when present).
   for (const k of data.keyEvents || []) {
     try {
-      const player =
-        (k.participants && k.participants[0] && k.participants[0].athlete &&
-          k.participants[0].athlete.displayName) || '';
+      const parts = k.participants || [];
+      const player = (parts[0] && parts[0].athlete && parts[0].athlete.displayName) || '';
+      // For goals, the 2nd participant is typically the assist provider; for
+      // substitutions it's the player coming on.
+      const assist = (parts[1] && parts[1].athlete && parts[1].athlete.displayName) || '';
       let typeTxt = (k.type && k.type.text) || '';
       if (k.scoringPlay || k.ownGoal) typeTxt = 'goal';
       else if (k.redCard) typeTxt = 'red card';
       else if (k.yellowCard) typeTxt = 'yellow card';
       else if (k.substitution) typeTxt = 'substitution';
-      add(clockToMin(k.clock), typeTxt, k.team && k.team.id, player, k.text || (k.type && k.type.text) || '');
+      add(clockToMin(k.clock), typeTxt, k.team && k.team.id, player, k.text || (k.type && k.type.text) || '', assist);
     } catch (_) {
       /* skip */
     }

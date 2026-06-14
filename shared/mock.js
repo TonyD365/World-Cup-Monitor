@@ -62,9 +62,25 @@ function mockLineup(side, team) {
 // Mock detail for the new Timeline/Lineups/Stats/Table tabs in DEMO mode.
 export function mockDetail(match) {
   const s = match.stats || {};
+  const home = mockLineup('home', match.home);
+  const away = mockLineup('away', match.away);
+  // Craft events that reference real lineup names so annotations show in DEMO.
+  const hs = home.starters;
+  const as = away.starters;
+  const events = [
+    { min: 0, type: 'half', team: '', player: '', detail: 'Kick Off', source: 'mock' },
+    { min: 12, type: 'goal', team: match.home.abbr, player: hs[9].name, assist: hs[7].name, detail: 'Goal', source: 'mock' },
+    { min: 23, type: 'yellow', team: match.away.abbr, player: as[5].name, detail: 'Yellow Card', source: 'mock' },
+    { min: 31, type: 'corner', team: match.home.abbr, player: '', detail: 'Corner', source: 'mock' },
+    { min: 45, type: 'half', team: '', player: '', detail: 'Half Time', source: 'mock' },
+    { min: 58, type: 'sub', team: match.home.abbr, player: hs[10].name, assist: home.subs[2].name, detail: 'Substitution', source: 'mock' },
+    { min: 66, type: 'goal', team: match.away.abbr, player: as[10].name, assist: as[8].name, detail: 'Goal', source: 'mock' },
+    { min: 74, type: 'red', team: match.away.abbr, player: as[3].name, detail: 'Red Card', source: 'mock' },
+    { min: 80, type: 'foul', team: match.home.abbr, player: '', detail: 'Foul', source: 'mock' },
+  ].filter((e) => e.min <= (match.minute || 90) || e.type === 'half');
   return {
-    events: match.events || [],
-    lineups: [mockLineup('home', match.home), mockLineup('away', match.away)],
+    events,
+    lineups: [home, away],
     stats: [
       { label: 'Possession %', home: `${s.possessionHome ?? 50}%`, away: `${s.possessionAway ?? 50}%` },
       { label: 'Shots', home: s.shotsHome ?? 0, away: s.shotsAway ?? 0 },

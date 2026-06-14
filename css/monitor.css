@@ -262,6 +262,22 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 
 .empty { color: var(--green-dim); padding: 20px 0; text-align: center; }
 
+/* Per-team summary below the score */
+.sb-summary { margin-top: 12px; }
+.ts-grid { border: 1px solid var(--green-dim); }
+.ts-row {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  padding: 3px 10px; font-size: 13px; border-bottom: 1px solid rgba(47, 181, 106, 0.25);
+}
+.ts-row:last-child { border-bottom: none; }
+.ts-h { text-align: left; color: var(--green); font-weight: bold; }
+.ts-a { text-align: right; color: var(--amber); font-weight: bold; }
+.ts-label { color: var(--green-soft); padding: 0 14px; white-space: nowrap; }
+
+/* Lineup player event marks */
+.lineup-row .pname { color: var(--green-soft); }
+.lineup-marks { margin-left: 4px; }
+
 .conflicts {
   margin-top: 12px; padding: 6px 8px; font-size: 12px;
   color: var(--amber); border: 1px solid var(--amber); background: rgba(255, 176, 0, 0.06);
