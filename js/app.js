@@ -35,6 +35,22 @@ const state = {
 
 // ---- match clock -----------------------------------------------------------
 // States: NOT STARTED / HALF TIME / HYDRATION BREAK / 45:00 (+x) / 90:00 (+x) / FULL TIME
+// ESPN reports drinks/cooling breaks only in the commentary text, e.g.
+// "Delay in match for a drinks break" (start) and "Delay over. They are ready
+// to continue." / "End Delay" (end). We're in a break if a start has occurred
+// with no matching end after it.
+function inHydrationBreak(m) {
+  let start = -1;
+  let end = -1;
+  for (const e of m.events || []) {
+    const d = (e.detail || '').toLowerCase();
+    const mn = e.min == null ? 999 : e.min;
+    if (/drinks? break|cooling break|hydration break/.test(d)) start = Math.max(start, mn);
+    else if (/delay over|ready to continue|\bend delay\b/.test(d)) end = Math.max(end, mn);
+  }
+  return start >= 0 && (end < 0 || end < start);
+}
+
 function clockText(m) {
   if (!m) return '';
   if (m.status === 'pre') return 'NOT STARTED';
@@ -42,7 +58,8 @@ function clockText(m) {
   const period = String(m.period || '');
   const p = period.toLowerCase();
   if (/\bht\b|half[\s-]?time/.test(p) && !/\d/.test(p)) return 'HALF TIME';
-  if (/hydration|cooling|water|drink/.test(p) || (/\bbreak\b/.test(p) && !/half/.test(p))) return 'HYDRATION BREAK';
+  // Hydration/drinks break (from commentary), or a status that flags it.
+  if (inHydrationBreak(m) || /hydration|cooling|drinks? break/.test(p)) return 'HYDRATION BREAK';
   const stop = /(\d+)\s*'?\s*\+\s*(\d+)/.exec(period);
   if (stop) {
     const base = parseInt(stop[1], 10);

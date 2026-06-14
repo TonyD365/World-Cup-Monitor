@@ -213,7 +213,9 @@ function parseEspnEvents(data) {
   const out = [];
   const seen = new Set();
   const add = (min, typeTxt, teamId, player, detail, assist = '') => {
-    const type = espnEventType(typeTxt || detail || '');
+    let type = espnEventType(typeTxt || detail || '');
+    // Drinks/cooling break shows up only in the commentary text.
+    if (/drinks? break|cooling break|hydration break/i.test(`${typeTxt || ''} ${detail || ''}`)) type = 'break';
     const key = `${min}|${type}|${player}|${(detail || '').slice(0, 40)}`;
     if (seen.has(key)) return;
     seen.add(key);
