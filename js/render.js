@@ -191,7 +191,11 @@ export function renderEventLog(m, shownKeys) {
   const evs = (m.events || []).slice().sort((a, b) => (a.min || 0) - (b.min || 0));
   let appended = false;
   for (const ev of evs) {
-    const key = `${m.id}|${ev.min}|${ev.type}|${ev.player}|${(ev.detail || '').slice(0, 30)}`;
+    // De-dupe goals to one line per minute+team (a goal can arrive from both
+    // keyEvents (with scorer) and commentary (without) — keep the richer one).
+    const key = ev.type === 'goal'
+      ? `${m.id}|goal|${ev.min}|${ev.team}`
+      : `${m.id}|${ev.min}|${ev.type}|${ev.player}|${(ev.detail || '').slice(0, 30)}`;
     if (shownKeys.has(key)) continue;
     shownKeys.add(key);
     appended = true;
@@ -203,12 +207,12 @@ export function renderEventLog(m, shownKeys) {
       line.className = 'log-line phase flash';
       line.innerHTML = `${icon} <span class="phase-text">${esc((ev.detail || '').toUpperCase())}</span> ${ts ? `<span class="phase-min" translate="no">${ts}</span>` : ''} ${icon}`;
     } else if (ev.type === 'goal') {
-      // Goals get the prominent, centered treatment too.
+      // ⚽ leads; assist (🅰) comes after the scorer, in parentheses.
       const team = ev.team ? `<span class="log-team" translate="no">[${esc(ev.team)}]</span>` : '';
-      const who = ev.player ? `<span class="goal-player" translate="no">${esc(ev.player)}</span>` : '';
-      const assist = ev.assist ? ` <span class="goal-assist" translate="no">🅰 ${esc(ev.assist)}</span>` : '';
+      const who = ev.player ? ` <span class="goal-player" translate="no">${esc(ev.player)}</span>` : '';
+      const assist = ev.assist ? ` <span class="goal-assist" translate="no">(🅰 ${esc(ev.assist)})</span>` : '';
       line.className = 'log-line goal-line flash';
-      line.innerHTML = `${icon} <span class="goal-text">GOAL</span> ${ts ? `<span class="phase-min" translate="no">${ts}</span>` : ''} ${team} ${who}${assist} ${icon}`;
+      line.innerHTML = `<span class="goal-ball">⚽</span> <span class="goal-text">GOAL</span> ${ts ? `<span class="phase-min" translate="no">${ts}</span>` : ''} ${team}${who}${assist}`;
     } else {
       line.className = `log-line type-${ev.type} flash`;
       const team = ev.team ? `<span class="log-team" translate="no">[${esc(ev.team)}]</span>` : '';
