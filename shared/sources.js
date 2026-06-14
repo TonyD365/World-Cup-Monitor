@@ -223,13 +223,20 @@ function parseEspnLineups(data) {
   const out = [];
   for (const r of rosters) {
     try {
-      const players = (r.roster || r.athletes || []).map((p) => ({
-        num: p.jersey || (p.athlete && p.athlete.jersey) || '',
-        name: (p.athlete && p.athlete.displayName) || p.displayName || '',
-        pos: (p.position && (p.position.abbreviation || p.position.name)) ||
-          (p.athlete && p.athlete.position && p.athlete.position.abbreviation) || '',
-        starter: p.starter != null ? !!p.starter : true,
-      })).filter((p) => p.name);
+      const players = (r.roster || r.athletes || []).map((p) => {
+        const ath = p.athlete || {};
+        const photo =
+          (ath.headshot && (ath.headshot.href || ath.headshot)) ||
+          (ath.id ? `https://a.espncdn.com/i/headshots/soccer/players/full/${ath.id}.png` : '');
+        return {
+          num: p.jersey || ath.jersey || '',
+          name: ath.displayName || p.displayName || '',
+          pos: (p.position && (p.position.abbreviation || p.position.name)) ||
+            (ath.position && ath.position.abbreviation) || '',
+          photo: typeof photo === 'string' ? photo : '',
+          starter: p.starter != null ? !!p.starter : true,
+        };
+      }).filter((p) => p.name);
       const teamId = String((r.team && r.team.id) || '');
       const side = r.homeAway === 'away' || (sides.awayId && teamId === sides.awayId) ? 'away' : 'home';
       out.push({

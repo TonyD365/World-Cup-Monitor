@@ -264,8 +264,11 @@ function teamTokens(lineup, side, marks) {
       const p = starters[idx];
       const x = ((k + 1) / (count + 1)) * 100;
       const ic = markIcons(marksFor(marks, p.name));
+      const photo = p.photo
+        ? `<img class="pt-photo" src="${esc(p.photo)}" alt="" loading="lazy" onerror="this.remove()">`
+        : '';
       out.push(`<div class="ptok ${side}" style="left:${x}%;top:${y}%">
-        <span class="pt-dot" translate="no">${esc(p.num)}${ic ? `<span class="pt-badge">${ic}</span>` : ''}</span>
+        <span class="pt-dot" translate="no"><span class="pt-num">${esc(p.num)}</span>${photo}${ic ? `<span class="pt-badge">${ic}</span>` : ''}</span>
         <span class="pt-name" translate="no">${esc(p.num)} ${esc(shortName(p.name))}</span>
       </div>`);
     }
@@ -301,7 +304,10 @@ export function renderLineups(detail) {
 
   const playerRow = (p, dim) => {
     const ic = markIcons(marksFor(marks, p.name));
-    return `<div class="lineup-row${dim ? ' dim' : ''}"><span class="num" translate="no">${esc(p.num)}</span> <span class="pname" translate="no">${esc(p.name)}</span> <span class="pos">${esc(p.pos)}</span>${ic ? ` <span class="lineup-marks" translate="no">${ic}</span>` : ''}</div>`;
+    const photo = p.photo
+      ? `<img class="lineup-photo" src="${esc(p.photo)}" alt="" loading="lazy" onerror="this.remove()">`
+      : '';
+    return `<div class="lineup-row${dim ? ' dim' : ''}">${photo}<span class="num" translate="no">${esc(p.num)}</span> <span class="pname" translate="no">${esc(p.name)}</span> <span class="pos">${esc(p.pos)}</span>${ic ? ` <span class="lineup-marks" translate="no">${ic}</span>` : ''}</div>`;
   };
   const col = (lu) => `
     <div class="lineup-col">
