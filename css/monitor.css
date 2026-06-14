@@ -330,6 +330,35 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 .tab.active { color: #000; background: var(--green); box-shadow: 0 0 8px var(--green-dim); }
 .tab-view { min-height: 320px; }
 
+/* Formation pitch */
+.pitch {
+  position: relative; width: 100%; max-width: 420px; margin: 0 auto 16px;
+  aspect-ratio: 3 / 4; min-height: 460px;
+  background: linear-gradient(180deg, #04140a 0%, #061f0e 50%, #04140a 100%);
+  border: 1px solid var(--green-dim); overflow: hidden;
+}
+.pitch-mid { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--green-dim); opacity: 0.6; }
+.pitch-circle {
+  position: absolute; left: 50%; top: 50%; width: 90px; height: 90px;
+  transform: translate(-50%, -50%); border: 1px solid var(--green-dim); border-radius: 50%; opacity: 0.6;
+}
+.pbox { position: absolute; left: 50%; transform: translateX(-50%); width: 55%; height: 13%; border: 1px solid var(--green-dim); opacity: 0.55; }
+.pbox.top { top: -1px; border-top: none; }
+.pbox.bot { bottom: -1px; border-bottom: none; }
+.pitch-label { position: absolute; left: 8px; font-size: 11px; color: var(--amber); z-index: 3; }
+.pitch-label.top { top: 6px; }
+.pitch-label.bot { bottom: 6px; }
+.ptok { position: absolute; transform: translate(-50%, -50%); width: 64px; text-align: center; z-index: 2; }
+.pt-dot {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%; font-size: 11px; font-weight: bold;
+  background: #02180c; margin: 0 auto;
+}
+.ptok.home .pt-dot { border: 2px solid var(--green); color: var(--green); box-shadow: 0 0 6px rgba(0, 255, 100, 0.4); }
+.ptok.away .pt-dot { border: 2px solid var(--amber); color: var(--amber); box-shadow: 0 0 6px rgba(255, 194, 61, 0.4); }
+.pt-badge { position: absolute; top: -8px; right: -14px; font-size: 9px; white-space: nowrap; line-height: 1; }
+.pt-name { display: block; margin-top: 2px; font-size: 9px; color: var(--green-soft); white-space: nowrap; }
+
 /* Lineups */
 .lineups { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 560px) { .lineups { grid-template-columns: 1fr; } }

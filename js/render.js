@@ -193,12 +193,15 @@ export function clearEventLog() {
 
 // ---- tab views: Lineups / Stats / Table -----------------------------------
 
-// Build a name -> {goals, assists, yellow, red, sub} map from the timeline so
-// we can annotate each player in the lineup.
+// Diacritic-insensitive, lowercased name key (so "Türkiye"/"Curaçao" players
+// in events match their roster entries).
+const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+
+// Build a name -> {goals, assists, yellow, red, sub} map from the timeline.
 function buildPlayerMarks(events) {
   const map = new Map();
   const get = (name) => {
-    const key = (name || '').trim().toLowerCase();
+    const key = norm(name);
     if (!key) return null;
     if (!map.has(key)) map.set(key, { g: 0, a: 0, y: 0, r: 0, s: false });
     return map.get(key);
@@ -214,7 +217,7 @@ function buildPlayerMarks(events) {
   return map;
 }
 function marksFor(map, name) {
-  const key = (name || '').trim().toLowerCase();
+  const key = norm(name);
   if (map.has(key)) return map.get(key);
   const last = key.split(/\s+/).pop();
   for (const [k, v] of map) if (k.split(/\s+/).pop() === last) return v;
@@ -223,12 +226,65 @@ function marksFor(map, name) {
 function markIcons(mk) {
   if (!mk) return '';
   let s = '';
-  if (mk.g) s += ' ' + '⚽'.repeat(Math.min(mk.g, 4));
-  if (mk.a) s += ` 🅰${mk.a > 1 ? mk.a : ''}`;
-  if (mk.y) s += ' 🟨';
-  if (mk.r) s += ' 🟥';
-  if (mk.s) s += ' ⇄';
-  return s ? `<span class="lineup-marks" translate="no">${s}</span>` : '';
+  if (mk.g) s += '⚽'.repeat(Math.min(mk.g, 4));
+  if (mk.a) s += `🅰${mk.a > 1 ? mk.a : ''}`;
+  if (mk.y) s += '🟨';
+  if (mk.r) s += '🟥';
+  if (mk.s) s += '⇄';
+  return s;
+}
+
+// "Joshua Kimmich" -> "J. Kimmich"
+function shortName(name) {
+  const parts = (name || '').trim().split(/\s+/);
+  if (parts.length < 2) return name || '';
+  return `${parts[0][0]}. ${parts[parts.length - 1]}`;
+}
+
+// Rows of a formation: GK + the formation lines, e.g. "4-2-3-1" -> [1,4,2,3,1].
+function formationRows(f) {
+  const nums = (f || '').split(/[^0-9]+/).filter(Boolean).map(Number).filter((n) => n > 0);
+  return nums.length ? [1, ...nums] : [1, 4, 3, 3]; // default if unknown
+}
+
+// Place a team's starters as absolutely-positioned tokens on the pitch.
+// home: GK at top, lines descending toward the centre; away: mirrored.
+function teamTokens(lineup, side, marks) {
+  const starters = (lineup && lineup.starters) || [];
+  if (!starters.length) return '';
+  const rows = formationRows(lineup.formation);
+  const R = rows.length;
+  const out = [];
+  let idx = 0;
+  for (let r = 0; r < R; r++) {
+    const t = R > 1 ? r / (R - 1) : 0;
+    const y = side === 'home' ? 5 + t * 41 : 95 - t * 41; // 5..46 / 95..54
+    const count = rows[r];
+    for (let k = 0; k < count && idx < starters.length; k++, idx++) {
+      const p = starters[idx];
+      const x = ((k + 1) / (count + 1)) * 100;
+      const ic = markIcons(marksFor(marks, p.name));
+      out.push(`<div class="ptok ${side}" style="left:${x}%;top:${y}%">
+        <span class="pt-dot" translate="no">${esc(p.num)}${ic ? `<span class="pt-badge">${ic}</span>` : ''}</span>
+        <span class="pt-name" translate="no">${esc(p.num)} ${esc(shortName(p.name))}</span>
+      </div>`);
+    }
+  }
+  return out.join('');
+}
+
+function renderPitch(home, away, marks) {
+  const ht = teamTokens(home, 'home', marks);
+  const at = teamTokens(away, 'away', marks);
+  if (!ht && !at) return '';
+  const label = (lu, cls) =>
+    lu ? `<div class="pitch-label ${cls}" translate="no">${esc(lu.team)}${lu.formation ? ' · ' + esc(lu.formation) : ''}</div>` : '';
+  return `<div class="pitch">
+    <div class="pbox top"></div><div class="pbox bot"></div>
+    <div class="pitch-mid"></div><div class="pitch-circle"></div>
+    ${label(home, 'top')}${label(away, 'bot')}
+    ${ht}${at}
+  </div>`;
 }
 
 export function renderLineups(detail) {
@@ -240,8 +296,13 @@ export function renderLineups(detail) {
     return;
   }
   const marks = buildPlayerMarks(detail && detail.events);
-  const playerRow = (p, dim) =>
-    `<div class="lineup-row${dim ? ' dim' : ''}"><span class="num" translate="no">${esc(p.num)}</span> <span class="pname" translate="no">${esc(p.name)}</span> <span class="pos">${esc(p.pos)}</span>${markIcons(marksFor(marks, p.name))}</div>`;
+  const home = lineups.find((l) => l.side === 'home') || lineups[0];
+  const away = lineups.find((l) => l.side === 'away') || lineups[1];
+
+  const playerRow = (p, dim) => {
+    const ic = markIcons(marksFor(marks, p.name));
+    return `<div class="lineup-row${dim ? ' dim' : ''}"><span class="num" translate="no">${esc(p.num)}</span> <span class="pname" translate="no">${esc(p.name)}</span> <span class="pos">${esc(p.pos)}</span>${ic ? ` <span class="lineup-marks" translate="no">${ic}</span>` : ''}</div>`;
+  };
   const col = (lu) => `
     <div class="lineup-col">
       <div class="lineup-head"><span translate="no">${esc(lu.team)}</span> ${lu.formation ? '· ' + esc(lu.formation) : ''}</div>
@@ -249,7 +310,8 @@ export function renderLineups(detail) {
       ${lu.starters.map((p) => playerRow(p, false)).join('')}
       ${lu.subs.length ? `<div class="lineup-sub-label">SUBS</div>${lu.subs.map((p) => playerRow(p, true)).join('')}` : ''}
     </div>`;
-  const html = `<div class="lineups">${lineups.map(col).join('')}</div>`;
+
+  const html = renderPitch(home, away, marks) + `<div class="lineups">${lineups.map(col).join('')}</div>`;
   if (sig.lineups !== html) {
     v.innerHTML = html;
     sig.lineups = html;
