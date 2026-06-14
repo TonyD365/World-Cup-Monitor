@@ -118,7 +118,6 @@ export function renderScoreboard(m) {
         ${stats.possessionHome != null ? bar('POSSESSION', stats.possessionHome, stats.possessionAway) : ''}
         ${stats.shotsHome != null ? bar('SHOTS', stats.shotsHome, stats.shotsAway) : ''}
       </div>` : ''}
-    ${renderConflicts(m)}
   `;
   if (sig.scoreboard !== html) {
     panel.innerHTML = html;
@@ -156,20 +155,6 @@ export function renderTeamSummary(m, detail) {
     `</div>`;
   // #sb-summary is translate="no", so rewriting it never causes Translate flicker.
   if (box.innerHTML !== html) box.innerHTML = html;
-}
-
-function renderConflicts(m) {
-  if (!m.conflicts || !m.conflicts.length) return '';
-  const items = m.conflicts
-    .slice(0, 4)
-    .map(
-      (c) =>
-        `⚠ SOURCE CONFLICT [${esc(c.field)}] — using <b>${esc(String(c.chosenSource).toUpperCase())}</b>=${esc(c.chosen)} (vs ${c.others
-          .map((o) => `${esc(o.source)}=${esc(o.value)}`)
-          .join(', ')})`
-    )
-    .join('<br>');
-  return `<div class="conflicts">${items}</div>`;
 }
 
 // Append new events to the streaming log (only those not already shown).
