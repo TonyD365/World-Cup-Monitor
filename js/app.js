@@ -47,12 +47,21 @@ function clockText(m) {
     const anchor = base >= 46 ? 90 : 45;
     return `${anchor}:00 (+${stop[2]})`;
   }
-  // Normal live: tick MM:SS from the last synced minute.
-  if (m.minute == null) return 'LIVE';
-  const secs = Math.floor((Date.now() - state.clockSyncedAt) / 1000);
-  let total = m.minute * 60 + Math.max(0, Math.min(secs, 600));
-  const cap = m.minute <= 45 ? 45 * 60 : 90 * 60;
-  if (total > cap) total = cap;
+  // Normal live: tick MM:SS.
+  let total;
+  if (m.minute != null) {
+    // Anchor to ESPN's reported minute, interpolate seconds since last poll.
+    const secs = Math.floor((Date.now() - state.clockSyncedAt) / 1000);
+    total = m.minute * 60 + Math.max(0, Math.min(secs, 120));
+    const cap = m.minute < 45 ? 45 * 60 : m.minute < 90 ? 90 * 60 : (m.minute + 1) * 60;
+    if (total > cap) total = cap;
+  } else {
+    // No minute from the feed (e.g. just kicked off): derive from kickoff time.
+    const ko = Date.parse(m.kickoff);
+    if (isNaN(ko)) return 'LIVE';
+    total = Math.max(0, Math.floor((Date.now() - ko) / 1000));
+    if (total > 45 * 60) total = 45 * 60; // don't overrun into 2nd half blindly
+  }
   const mm = String(Math.floor(total / 60)).padStart(2, '0');
   const ss = String(total % 60).padStart(2, '0');
   return `${mm}:${ss}`;

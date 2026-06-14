@@ -66,6 +66,13 @@ function espnEventType(typeTxt = '') {
   return 'info';
 }
 
+// Parse ESPN displayClock ("67'", "0'", "45'+2") to a minute. Keeps 0 (kickoff).
+function espnMinute(dc) {
+  if (dc == null) return null;
+  const n = parseInt(String(dc), 10);
+  return Number.isNaN(n) ? null : n;
+}
+
 function clockToMin(c) {
   if (!c) return null;
   const dv = typeof c === 'object' ? c.displayValue : c;
@@ -131,7 +138,7 @@ export async function fetchEspn(fetchImpl) {
         home: team(homeC),
         away: team(awayC),
         status: mapEspnStatus(st.state),
-        minute: st.displayClock ? parseInt(st.displayClock, 10) || null : null,
+        minute: espnMinute(st.displayClock),
         period: st.shortDetail || null,
         venue: (comp.venue && comp.venue.fullName) || null,
         kickoff: ev.date || null,
