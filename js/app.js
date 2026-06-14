@@ -67,21 +67,25 @@ function clockText(m) {
     return `${anchor}:00 (+${stop[2]})`;
   }
   let total;
-  if (m.minute != null) {
-    // Re-anchor when the reported minute (or match) changes, then interpolate
-    // seconds 0..59 within that minute. (At 1s polling we can't drive seconds
-    // by poll-delta, so anchor on the minute value instead.)
-    const a = state.clockAnchor;
-    if (a.id !== m.id || a.minute !== m.minute) {
-      state.clockAnchor = { id: m.id, minute: m.minute, at: Date.now() };
-    }
-    const secs = Math.min(59, Math.floor((Date.now() - state.clockAnchor.at) / 1000));
-    total = m.minute * 60 + secs;
-  } else {
+  let minute = m.minute;
+  const a = state.clockAnchor;
+  // Keep the last known minute if the feed momentarily drops it (avoids a flash
+  // to the kickoff fallback, which caps at 45:00 — the "45 flash" in 2nd half).
+  if (minute == null && a.id === m.id && a.minute != null) minute = a.minute;
+  if (minute == null) {
+    // Truly unknown (e.g. just kicked off): derive from kickoff time.
     const ko = Date.parse(m.kickoff);
     if (isNaN(ko)) return 'LIVE';
     total = Math.max(0, Math.floor((Date.now() - ko) / 1000));
     if (total > 45 * 60) total = 45 * 60;
+  } else {
+    // Minutes only increase within a live match — ignore transient backward dips.
+    if (a.id === m.id && a.minute != null && minute < a.minute) minute = a.minute;
+    if (a.id !== m.id || a.minute !== minute) {
+      state.clockAnchor = { id: m.id, minute, at: Date.now() };
+    }
+    const secs = Math.min(59, Math.floor((Date.now() - state.clockAnchor.at) / 1000));
+    total = minute * 60 + secs;
   }
   const mm = String(Math.floor(total / 60)).padStart(2, '0');
   const ss = String(total % 60).padStart(2, '0');
@@ -223,7 +227,7 @@ function renderSelected(m) {
   renderClock();
   renderTeamSummary(m, state.detail);
   renderMatchExtra(m, state.detail);
-  renderEventLog(m, state.shownKeys);
+  renderEventLog(m, state.shownKeys, state.detail);
   renderActiveTab();
 }
 
@@ -264,7 +268,7 @@ async function poll() {
       const L = detail && detail.live;
       if (L) {
         if (L.status) m.status = L.status;
-        m.minute = L.minute;
+        if (L.minute != null) m.minute = L.minute; // don't clobber with null
         if (L.period) m.period = L.period;
         if (L.homeScore != null) m.home.score = L.homeScore;
         if (L.awayScore != null) m.away.score = L.awayScore;
@@ -312,7 +316,10 @@ function init() {
     state.clockAnchor = { id: null, minute: null, at: 0 };
     clearEventLog();
     renderMatchStrip(state.matches, state.selectedId);
-    renderSelected(selectedMatch());
+    // Immediate scoreboard feedback; the event log + tabs are filled by poll()
+    // once detail (lineups → jersey numbers, etc.) has loaded.
+    renderScoreboard(selectedMatch());
+    renderClock();
     poll(); // fetch detail for the newly selected match right away
   });
 

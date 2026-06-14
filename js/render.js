@@ -185,9 +185,21 @@ export function renderMatchExtra(m, detail) {
 }
 
 // Append new events to the streaming log (only those not already shown).
-export function renderEventLog(m, shownKeys) {
+export function renderEventLog(m, shownKeys, detail) {
   const log = el('event-log');
   if (!m) return;
+  // Map player name -> jersey number (from lineups) to prefix names with #.
+  const numByName = new Map();
+  for (const lu of (detail && detail.lineups) || []) {
+    for (const p of [...(lu.starters || []), ...(lu.subs || [])]) {
+      if (p.name && p.num !== '' && p.num != null) numByName.set(norm(p.name), p.num);
+    }
+  }
+  const withNum = (name) => {
+    if (!name) return '';
+    const n = numByName.get(norm(name));
+    return n != null && n !== '' ? `${n} ${name}` : name;
+  };
   const evs = (m.events || []).slice().sort((a, b) => (a.min || 0) - (b.min || 0));
   let appended = false;
   for (const ev of evs) {
@@ -209,15 +221,15 @@ export function renderEventLog(m, shownKeys) {
     } else if (ev.type === 'goal') {
       // ⚽ leads; assist (🅰) comes after the scorer, in parentheses.
       const team = ev.team ? `<span class="log-team" translate="no">[${esc(ev.team)}]</span>` : '';
-      const who = ev.player ? ` <span class="goal-player" translate="no">${esc(ev.player)}</span>` : '';
-      const assist = ev.assist ? ` <span class="goal-assist" translate="no">(🅰 ${esc(ev.assist)})</span>` : '';
+      const who = ev.player ? ` <span class="goal-player" translate="no">${esc(withNum(ev.player))}</span>` : '';
+      const assist = ev.assist ? ` <span class="goal-assist" translate="no">(🅰 ${esc(withNum(ev.assist))})</span>` : '';
       line.className = 'log-line goal-line flash';
       line.innerHTML = `<span class="goal-ball">⚽</span> <span class="goal-text">GOAL</span> ${ts ? `<span class="phase-min" translate="no">${ts}</span>` : ''} ${team}${who}${assist}`;
     } else {
       line.className = `log-line type-${ev.type} flash`;
       const team = ev.team ? `<span class="log-team" translate="no">[${esc(ev.team)}]</span>` : '';
-      const who = ev.player ? `<span class="log-player" translate="no">${esc(ev.player)}</span>` : '';
-      const assist = ev.assist ? ` <span class="log-assist" translate="no">🅰 ${esc(ev.assist)}</span>` : '';
+      const who = ev.player ? `<span class="log-player" translate="no">${esc(withNum(ev.player))}</span>` : '';
+      const assist = ev.assist ? ` <span class="log-assist" translate="no">🅰 ${esc(withNum(ev.assist))}</span>` : '';
       line.innerHTML = `<span class="log-ts" translate="no">${ts ? '[' + ts + ']' : ''}</span> ${icon} <span class="log-type">${esc(ev.type.toUpperCase())}</span> ${team} ${who}${assist} <span class="log-detail">${esc(ev.detail || '')}</span>`;
     }
     log.appendChild(line);
