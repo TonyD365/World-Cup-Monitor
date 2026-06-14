@@ -4,13 +4,13 @@
 
 A hacker-terminal-style live monitor for the FIFA World Cup. It is **not** tied to a single
 fixture: a horizontal, time-sorted timeline lists matches, and the selected match's
-score / clock / events refresh **every 5 seconds**. It is a **pure static site** — the browser
+score / clock / events refresh **every second**. It is a **pure static site** — the browser
 fetches data directly from no-key, CORS-friendly sources and merges them client-side, with the
 most authoritative source winning when they disagree.
 
 ## Features
 - 🖥️ Black CRT / terminal aesthetic: scanlines, flicker, blinking cursor, phosphor green + amber.
-- 🔄 5-second polling with a live progress bar and per-refresh screen flash.
+- 🔄 1-second polling with a live progress bar and per-refresh screen flash.
 - ⏱️ Live match clock above the score: `NOT STARTED`, ticking `MM:SS`, `45:00 (+x)` / `90:00 (+x)`
   stoppage, `HALF TIME`, `COOLING BREAK`, `FULL TIME`.
 - 🗓️ Timeline selector: matches shown as boxes on a time axis (day, start–estimated end, teams,
@@ -72,12 +72,12 @@ No build step, no Functions, no environment variables, no API keys.
 **线上地址:** https://world-cup-monitor.pages.dev
 
 一个**黑客终端风格**的 FIFA 世界杯实时监控页面。它**不绑定**某一场比赛:用**横向时间线**列出比赛,
-所选比赛的比分 / 计时 / 事件**每 5 秒刷新一次**。它是**纯静态站点**——由浏览器**直接**从免密钥、
+所选比赛的比分 / 计时 / 事件**每秒刷新一次**。它是**纯静态站点**——由浏览器**直接**从免密钥、
 CORS 友好的数据源拉取并在客户端合并,冲突时以最权威的源为准。
 
 ## 功能特性
 - 🖥️ 黑色 CRT / 终端风格:扫描线、闪烁、闪烁光标、磷光绿 + 琥珀色。
-- 🔄 5 秒轮询,带进度条,每次刷新整屏闪烁。
+- 🔄 1 秒轮询,带进度条,每次刷新整屏闪烁。
 - ⏱️ 比分上方的比赛计时:`NOT STARTED`、跳秒 `MM:SS`、`45:00 (+x)`/`90:00 (+x)` 补时、
   `HALF TIME`、`COOLING BREAK`、`FULL TIME`。
 - 🗓️ 时间线选择器:比赛以方框排在时间轴上(日期、开始–预计结束、两队、比分、状态),
