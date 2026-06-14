@@ -34,7 +34,7 @@ const state = {
 };
 
 // ---- match clock -----------------------------------------------------------
-// States: NOT STARTED / HALF TIME / COOLING BREAK / 45:00 (+x) / 90:00 (+x) / FULL TIME
+// States: NOT STARTED / HALF TIME / HYDRATION BREAK / 45:00 (+x) / 90:00 (+x) / FULL TIME
 function clockText(m) {
   if (!m) return '';
   if (m.status === 'pre') return 'NOT STARTED';
@@ -42,7 +42,7 @@ function clockText(m) {
   const period = String(m.period || '');
   const p = period.toLowerCase();
   if (/\bht\b|half[\s-]?time/.test(p) && !/\d/.test(p)) return 'HALF TIME';
-  if (/cool|water|drink|break/.test(p)) return 'COOLING BREAK';
+  if (/hydration|cooling|water|drink/.test(p) || (/\bbreak\b/.test(p) && !/half/.test(p))) return 'HYDRATION BREAK';
   const stop = /(\d+)\s*'?\s*\+\s*(\d+)/.exec(period);
   if (stop) {
     const base = parseInt(stop[1], 10);

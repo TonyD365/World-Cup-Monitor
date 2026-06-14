@@ -139,7 +139,9 @@ export async function fetchEspn(fetchImpl) {
         away: team(awayC),
         status: mapEspnStatus(st.state),
         minute: espnMinute(st.displayClock),
-        period: st.shortDetail || null,
+        // Prefer a descriptive status (e.g. "Cooling Break", "Halftime",
+        // "Delayed") when present, else the short clock detail ("67'").
+        period: st.description || st.detail || st.shortDetail || null,
         venue: (comp.venue && comp.venue.fullName) || null,
         kickoff: ev.date || null,
         events,

@@ -261,6 +261,18 @@ function markIcons(mk) {
   return s;
 }
 
+// Initials-avatar fallback (no key, themed) when a real headshot is missing.
+function avatarUrl(name) {
+  const n = encodeURIComponent((name || '?').trim());
+  return `https://ui-avatars.com/api/?name=${n}&background=02180c&color=2fb56a&bold=true&length=2&size=96`;
+}
+// <img> that tries the ESPN headshot, then falls back to the initials avatar.
+function playerImg(p, cls) {
+  const av = avatarUrl(p.name);
+  const src = p.photo || av;
+  return `<img class="${cls}" src="${esc(src)}" data-fb="${esc(av)}" alt="" loading="lazy" onerror="this.onerror=null;this.src=this.dataset.fb">`;
+}
+
 // "Joshua Kimmich" -> "J. Kimmich"
 function shortName(name) {
   const parts = (name || '').trim().split(/\s+/);
@@ -291,11 +303,8 @@ function teamTokens(lineup, side, marks) {
       const p = starters[idx];
       const x = ((k + 1) / (count + 1)) * 100;
       const ic = markIcons(marksFor(marks, p.name));
-      const photo = p.photo
-        ? `<img class="pt-photo" src="${esc(p.photo)}" alt="" loading="lazy" onerror="this.remove()">`
-        : '';
       out.push(`<div class="ptok ${side}" style="left:${x}%;top:${y}%">
-        <span class="pt-dot" translate="no"><span class="pt-num">${esc(p.num)}</span>${photo}${ic ? `<span class="pt-badge">${ic}</span>` : ''}</span>
+        <span class="pt-dot" translate="no"><span class="pt-num">${esc(p.num)}</span>${playerImg(p, 'pt-photo')}${ic ? `<span class="pt-badge">${ic}</span>` : ''}</span>
         <span class="pt-name" translate="no">${esc(p.num)} ${esc(shortName(p.name))}</span>
       </div>`);
     }
@@ -331,10 +340,7 @@ export function renderLineups(detail) {
 
   const playerRow = (p, dim) => {
     const ic = markIcons(marksFor(marks, p.name));
-    const photo = p.photo
-      ? `<img class="lineup-photo" src="${esc(p.photo)}" alt="" loading="lazy" onerror="this.remove()">`
-      : '';
-    return `<div class="lineup-row${dim ? ' dim' : ''}">${photo}<span class="num" translate="no">${esc(p.num)}</span> <span class="pname" translate="no">${esc(p.name)}</span> <span class="pos">${esc(p.pos)}</span>${ic ? ` <span class="lineup-marks" translate="no">${ic}</span>` : ''}</div>`;
+    return `<div class="lineup-row${dim ? ' dim' : ''}">${playerImg(p, 'lineup-photo')}<span class="num" translate="no">${esc(p.num)}</span> <span class="pname" translate="no">${esc(p.name)}</span> <span class="pos">${esc(p.pos)}</span>${ic ? ` <span class="lineup-marks" translate="no">${ic}</span>` : ''}</div>`;
   };
   const col = (lu) => `
     <div class="lineup-col">
