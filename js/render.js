@@ -450,57 +450,63 @@ function pitchSvgMarkings() {
     <rect x="1" y="26" width="5" height="12" class="pf-line" fill="none"/>
     <rect x="94" y="26" width="5" height="12" class="pf-line" fill="none"/>`;
 }
-export function renderPitch(detail, m) {
-  const v = el('view-pitch');
+const PF_SCALE = (n) => (n == null ? null : Math.max(0, Math.min(1, n > 1.5 ? n / 100 : n)));
+const PF_X = (n) => (PF_SCALE(n) * 98 + 1).toFixed(1);
+const PF_Y = (n) => (PF_SCALE(n) * 62 + 1).toFixed(1);
+
+// Live ball position + last play, shown below the scoreboard (live only).
+export function renderBallField(detail, m) {
+  const v = el('ball-field');
+  if (!v) return;
   const plays = detail && detail.plays;
-  if (!plays) {
-    v.innerHTML = '<div class="empty">// NO PITCH DATA</div>';
-    sig.pitch = '';
+  const lp = plays && plays.lastPlay;
+  const live = m && m.status === 'live';
+  if (!live || !lp || lp.x == null || lp.y == null) { if (v.innerHTML) v.innerHTML = ''; return; }
+  const trail = lp.x2 != null && lp.y2 != null
+    ? `<line x1="${PF_X(lp.x2)}" y1="${PF_Y(lp.y2)}" x2="${PF_X(lp.x)}" y2="${PF_Y(lp.y)}" class="pf-trail"/><circle cx="${PF_X(lp.x2)}" cy="${PF_Y(lp.y2)}" r="1.4" class="pf-trail-dot"/>`
+    : '';
+  const html = `
+    <div class="pf-title">LIVE BALL</div>
+    <svg class="pitch-svg" viewBox="0 0 100 64" preserveAspectRatio="xMidYMid meet">
+      <rect x="0" y="0" width="100" height="64" class="pf-grass"/>
+      ${pitchSvgMarkings()}
+      ${trail}
+      <circle cx="${PF_X(lp.x)}" cy="${PF_Y(lp.y)}" r="2.2" class="pf-ball"/>
+    </svg>
+    <div class="pf-last"><span class="pf-last-h">LAST PLAY</span> ${lp.min ? `<span translate="no">${lp.min}'</span>` : ''} ${esc(lp.text || lp.type || '')}</div>`;
+  if (v.innerHTML !== html) v.innerHTML = html;
+}
+
+// Shot map, shown in its own panel below the tabs.
+export function renderShotMap(detail) {
+  const v = el('shot-map');
+  if (!v) return;
+  const shots = (detail && detail.plays && detail.plays.shots || []).filter((s) => s.x != null && s.y != null);
+  if (!shots.length) {
+    const empty = '<div class="empty">// NO SHOT DATA</div>';
+    if (v.innerHTML !== empty) v.innerHTML = empty;
+    sig.shotmap = '';
     return;
   }
-  const sc = (n) => (n == null ? null : Math.max(0, Math.min(1, n > 1.5 ? n / 100 : n)));
-  const X = (n) => (sc(n) * 98 + 1).toFixed(1);
-  const Y = (n) => (sc(n) * 62 + 1).toFixed(1);
-
-  // Live ball + last play trail (only while the match is live).
-  let ball = '';
-  const lp = plays.lastPlay;
-  const live = m && m.status === 'live';
-  if (live && lp && lp.x != null && lp.y != null) {
-    const trail = lp.x2 != null && lp.y2 != null
-      ? `<line x1="${X(lp.x2)}" y1="${Y(lp.y2)}" x2="${X(lp.x)}" y2="${Y(lp.y)}" class="pf-trail"/><circle cx="${X(lp.x2)}" cy="${Y(lp.y2)}" r="1.4" class="pf-trail-dot"/>`
-      : '';
-    ball = `${trail}<circle cx="${X(lp.x)}" cy="${Y(lp.y)}" r="2.2" class="pf-ball"/>`;
-  }
-
-  const shots = (plays.shots || []).filter((s) => s.x != null && s.y != null);
   const dots = shots
     .map((s) => {
       const st = SHOT_STYLE[s.result] || SHOT_STYLE.miss;
-      return `<circle cx="${X(s.x)}" cy="${Y(s.y)}" r="1.8" class="${st.cls}"><title>${esc(`${st.label} ${s.min ? s.min + "'" : ''} ${s.text || ''}`)}</title></circle>`;
+      return `<circle cx="${PF_X(s.x)}" cy="${PF_Y(s.y)}" r="1.8" class="${st.cls}"><title>${esc(`${st.label} ${s.min ? s.min + "'" : ''} ${s.text || ''}`)}</title></circle>`;
     })
     .join('');
-
   const counts = { goal: 0, save: 0, miss: 0, block: 0 };
   for (const s of shots) counts[s.result] = (counts[s.result] || 0) + 1;
   const legend = Object.keys(SHOT_STYLE)
     .map((k) => `<span class="pf-leg ${SHOT_STYLE[k].cls}-leg">● ${SHOT_STYLE[k].label} ${counts[k] || 0}</span>`)
     .join('');
-
-  const lastText = live && lp ? `<div class="pf-last"><span class="pf-last-h">LAST PLAY</span> ${lp.min ? `<span translate="no">${lp.min}'</span>` : ''} ${esc(lp.text || lp.type || '')}</div>` : '';
-
   const html = `
-    <div class="pf-title">SHOT MAP${live ? ' · LIVE BALL' : ''}</div>
     <svg class="pitch-svg" viewBox="0 0 100 64" preserveAspectRatio="xMidYMid meet">
       <rect x="0" y="0" width="100" height="64" class="pf-grass"/>
       ${pitchSvgMarkings()}
       ${dots}
-      ${ball}
     </svg>
-    <div class="pf-legend">${legend}</div>
-    ${lastText}
-    ${shots.length ? '' : '<div class="empty">// no shots recorded yet</div>'}`;
-  if (sig.pitch !== html) { v.innerHTML = html; sig.pitch = html; }
+    <div class="pf-legend">${legend}</div>`;
+  if (sig.shotmap !== html) { v.innerHTML = html; sig.shotmap = html; }
 }
 
 export function renderHealth(health) {

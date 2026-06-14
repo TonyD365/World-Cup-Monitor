@@ -14,7 +14,8 @@ import {
   renderLineups,
   renderStats,
   renderTable,
-  renderPitch,
+  renderBallField,
+  renderShotMap,
   renderTeamSummary,
   renderMatchExtra,
 } from './render.js';
@@ -237,7 +238,6 @@ function renderActiveTab() {
   const m = selectedMatch();
   if (state.activeTab === 'lineups') { renderLineups(state.detail); upgradeLineupPhotos(); }
   else if (state.activeTab === 'stats') renderStats(state.detail);
-  else if (state.activeTab === 'pitch') renderPitch(state.detail, m);
   else if (state.activeTab === 'table') renderTable(state.detail, m);
 }
 
@@ -261,6 +261,8 @@ function renderSelected(m) {
   renderClock();
   renderTeamSummary(m, state.detail);
   renderMatchExtra(m, state.detail);
+  renderBallField(state.detail, m); // live ball, below the scoreboard
+  renderShotMap(state.detail); // shot map panel, below the tabs
   renderEventLog(m, state.shownKeys, state.detail);
   renderActiveTab();
 }
@@ -356,6 +358,8 @@ function init() {
     state.clockAnchor = { id: null, minute: null, at: 0 };
     state.stopAnchor = { id: null, base: null, at: 0 };
     clearEventLog();
+    const bf = document.getElementById('ball-field'); if (bf) bf.innerHTML = '';
+    const sm = document.getElementById('shot-map'); if (sm) sm.innerHTML = '<div class="empty">// NO SHOT DATA</div>';
     renderMatchStrip(state.matches, state.selectedId);
     // Immediate scoreboard feedback; the event log + tabs are filled by poll()
     // once detail (lineups → jersey numbers, etc.) has loaded.

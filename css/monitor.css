@@ -439,6 +439,9 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 .lineup-row .pos { color: var(--green-dim); font-size: 11px; }
 
 /* Pitch / shot map */
+#ball-field:not(:empty) { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--green-dim); }
+#shot-map-panel { margin-top: 14px; }
+#shot-map .pitch-svg, #ball-field .pitch-svg { max-width: 640px; margin: 0 auto; }
 .pf-title { color: var(--green-dim); letter-spacing: 2px; font-size: 12px; text-align: center; margin-bottom: 6px; }
 .pitch-svg { width: 100%; height: auto; display: block; border: 1px solid var(--green-dim); background: #04140a; }
 .pf-grass { fill: #052612; }
