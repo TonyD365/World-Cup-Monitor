@@ -290,10 +290,11 @@ function avatarUrl(name) {
   return `https://ui-avatars.com/api/?name=${n}&background=02180c&color=2fb56a&bold=true&length=2&size=96`;
 }
 // <img> that tries the ESPN headshot, then falls back to the initials avatar.
+// data-pname lets app.js lazily upgrade avatar-only players to a real photo.
 function playerImg(p, cls) {
   const av = avatarUrl(p.name);
   const src = p.photo || av;
-  return `<img class="${cls}" src="${esc(src)}" data-fb="${esc(av)}" alt="" loading="lazy" onerror="this.onerror=null;this.src=this.dataset.fb">`;
+  return `<img class="${cls}" src="${esc(src)}" data-fb="${esc(av)}" data-pname="${esc(p.name)}" alt="" loading="lazy" onerror="this.onerror=null;this.src=this.dataset.fb">`;
 }
 
 // "Joshua Kimmich" -> "J. Kimmich"

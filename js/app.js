@@ -1,6 +1,6 @@
 // js/app.js — controller: polling loop, selector wiring, state.
 import { CONFIG } from './config.js';
-import { loadMatches, loadDetail, loadStandings, health } from './data.js';
+import { loadMatches, loadDetail, loadStandings, resolvePlayerPhoto, health } from './data.js';
 import {
   renderMatchStrip,
   renderScoreboard,
@@ -234,9 +234,22 @@ function showTab(tab) {
 
 function renderActiveTab() {
   const m = selectedMatch();
-  if (state.activeTab === 'lineups') renderLineups(state.detail);
+  if (state.activeTab === 'lineups') { renderLineups(state.detail); upgradeLineupPhotos(); }
   else if (state.activeTab === 'stats') renderStats(state.detail);
   else if (state.activeTab === 'table') renderTable(state.detail, m);
+}
+
+// Upgrade players still showing an initials avatar to a real photo (TheSportsDB).
+async function upgradeLineupPhotos() {
+  const imgs = document.querySelectorAll('#view-lineups img[data-pname]');
+  for (const img of imgs) {
+    const cur = img.getAttribute('src') || '';
+    if (!cur.includes('ui-avatars.com')) continue; // already a real photo
+    if (img.dataset.tried === '1') continue;
+    img.dataset.tried = '1';
+    const url = await resolvePlayerPhoto(img.dataset.pname); // sequential = gentle on rate limits
+    if (url && (img.getAttribute('src') || '').includes('ui-avatars.com')) img.src = url;
+  }
 }
 
 // Render the selected match's scoreboard + all dependent panels.

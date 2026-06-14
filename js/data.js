@@ -9,7 +9,35 @@ import { mergeMatches, effectiveAuthority } from '../shared/core.js';
 import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchOpenfootballStandings } from '../shared/sources.js';
 import { mockMatches, mockDetail } from '../shared/mock.js';
 
-// Group standings computed from openfootball results, cached (refreshes slowly).
+// Resolve a real player photo by name via TheSportsDB (free key, CORS-ok) when
+// ESPN has no headshot. Cached per session; '' means "looked up, none found".
+const _photoCache = new Map();
+const _photoPending = new Map();
+const _pnorm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+
+export async function resolvePlayerPhoto(name) {
+  const k = _pnorm(name);
+  if (!k) return '';
+  if (_photoCache.has(k)) return _photoCache.get(k);
+  if (_photoPending.has(k)) return _photoPending.get(k);
+  const p = (async () => {
+    let url = '';
+    try {
+      const res = await fetch(`https://www.thesportsdb.com/api/v1/json/123/searchplayers.php?p=${encodeURIComponent(name)}`);
+      if (res.ok) {
+        const j = await res.json();
+        const pl = j && Array.isArray(j.player) && j.player[0];
+        if (pl) url = pl.strCutout || pl.strThumb || '';
+      }
+    } catch (_) { /* CORS/network — fall back to avatar */ }
+    _photoCache.set(k, url);
+    _photoPending.delete(k);
+    return url;
+  })();
+  _photoPending.set(k, p);
+  return p;
+}
+
 let _standings = null;
 let _standingsAt = 0;
 export async function loadStandings() {
