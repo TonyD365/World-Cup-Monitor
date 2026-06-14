@@ -228,6 +228,56 @@ function parseEspnInfo(data) {
   };
 }
 
+// Live play-by-play with field coordinates (ESPN core API) for the ball-position
+// widget and shot map. Returns { lastPlay, shots } or null. Defensive: the core
+// API is $ref-heavy and may be CORS-blocked in the browser — callers handle null.
+export async function fetchEspnPlays(fetchImpl, eventId) {
+  const url = `https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world/events/${eventId}/competitions/${eventId}/plays?limit=400&lang=en`;
+  const data = await getJSON(fetchImpl, url);
+  const items = data && (data.items || data.plays);
+  if (!Array.isArray(items)) return null;
+  const num = (v) => (typeof v === 'number' ? v : v != null && !isNaN(parseFloat(v)) ? parseFloat(v) : null);
+  const teamId = (p) => {
+    const r = (p.team && p.team.$ref) || '';
+    const mm = /teams\/(\d+)/.exec(r);
+    return mm ? mm[1] : '';
+  };
+  const norm = items.map((p) => ({
+    x: num(p.fieldPositionX), y: num(p.fieldPositionY),
+    x2: num(p.fieldPosition2X), y2: num(p.fieldPosition2Y),
+    type: (p.type && p.type.text) || '', text: p.text || p.shortText || '',
+    min: (p.clock && parseInt(p.clock.displayValue, 10)) || null,
+    team: teamId(p), scoring: !!p.scoringPlay,
+  }));
+
+  let lastPlay = null;
+  for (let i = norm.length - 1; i >= 0; i--) {
+    if (norm[i].x != null && norm[i].y != null) { lastPlay = norm[i]; break; }
+  }
+  if (!lastPlay && norm.length) lastPlay = norm[norm.length - 1];
+
+  const shots = [];
+  for (const p of norm) {
+    if (p.x == null || p.y == null) continue;
+    const t = `${p.type} ${p.text}`.toLowerCase();
+    if (t.includes('goal kick')) continue;
+    // Only count actual shots (avoid e.g. "Attempted tackle").
+    const isShot = /\bshot\b/.test(t) ||
+      /\battempt\s+(saved|missed|blocked|on goal)/.test(t) ||
+      /header\s+(saved|missed|blocked|wide|over the bar|on goal)/.test(t) ||
+      /penalty\s+(scored|missed|saved)/.test(t) ||
+      /free kick\s+(saved|missed)/.test(t);
+    let result = null;
+    if (p.scoring || /\bgoal\b/.test(t)) result = 'goal';
+    else if (!isShot) continue;
+    else if (/saved/.test(t)) result = 'save';
+    else if (/block/.test(t)) result = 'block';
+    else result = 'miss';
+    shots.push({ x: p.x, y: p.y, result, min: p.min, team: p.team, text: p.text });
+  }
+  return { lastPlay, shots };
+}
+
 function parseEspnEvents(data) {
   const sides = teamSides(data);
   const out = [];

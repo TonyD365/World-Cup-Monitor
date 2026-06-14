@@ -88,6 +88,15 @@ export function mockDetail(match) {
       { label: 'Corners', home: 4, away: 3 },
       { label: 'Fouls', home: 8, away: 11 },
     ],
+    plays: {
+      lastPlay: { x: 0.46, y: 0.4, x2: 0.62, y2: 0.55, type: 'Attempted tackle', text: `Attempted tackle at ${match.minute || 1}'`, min: match.minute || 1, team: match.home.abbr },
+      shots: [
+        { x: 0.16, y: 0.42, result: 'goal', min: 12, team: match.home.abbr, text: 'Goal' },
+        { x: 0.22, y: 0.6, result: 'miss', min: 23, team: match.away.abbr, text: 'Shot off target' },
+        { x: 0.2, y: 0.3, result: 'save', min: 40, team: match.home.abbr, text: 'Saved' },
+        { x: 0.83, y: 0.55, result: 'block', min: 58, team: match.away.abbr, text: 'Blocked' },
+      ],
+    },
     predictor: { home: 48, draw: 27, away: 25 },
     info: {
       venue: match.venue || 'Demo Stadium',

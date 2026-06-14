@@ -438,6 +438,27 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 .lineup-row .num { display: inline-block; width: 24px; color: var(--amber); text-align: right; }
 .lineup-row .pos { color: var(--green-dim); font-size: 11px; }
 
+/* Pitch / shot map */
+.pf-title { color: var(--green-dim); letter-spacing: 2px; font-size: 12px; text-align: center; margin-bottom: 6px; }
+.pitch-svg { width: 100%; height: auto; display: block; border: 1px solid var(--green-dim); background: #04140a; }
+.pf-grass { fill: #052612; }
+.pf-line { stroke: var(--green-dim); stroke-width: 0.4; opacity: 0.7; }
+.pf-dot { fill: var(--green-dim); }
+.pf-trail { stroke: var(--green); stroke-width: 0.5; stroke-dasharray: 1.5 1.2; opacity: 0.9; }
+.pf-trail-dot { fill: none; stroke: var(--green); stroke-width: 0.5; }
+.pf-ball { fill: #fff; stroke: var(--green); stroke-width: 0.6; }
+.shot-goal { fill: var(--green); stroke: #fff; stroke-width: 0.4; }
+.shot-save { fill: var(--amber); stroke: #000; stroke-width: 0.3; }
+.shot-miss { fill: none; stroke: #cfe; stroke-width: 0.6; }
+.shot-block { fill: #4aa3ff; stroke: #000; stroke-width: 0.3; }
+.pf-legend { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 8px; font-size: 11px; }
+.shot-goal-leg { color: var(--green); }
+.shot-save-leg { color: var(--amber); }
+.shot-miss-leg { color: #cfe; }
+.shot-block-leg { color: #4aa3ff; }
+.pf-last { margin-top: 8px; text-align: center; font-size: 12px; color: var(--green-soft); }
+.pf-last-h { color: var(--amber); letter-spacing: 1px; }
+
 /* Standings table */
 .sg { margin-bottom: 16px; }
 .sg-title {

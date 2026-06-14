@@ -14,6 +14,7 @@ import {
   renderLineups,
   renderStats,
   renderTable,
+  renderPitch,
   renderTeamSummary,
   renderMatchExtra,
 } from './render.js';
@@ -236,6 +237,7 @@ function renderActiveTab() {
   const m = selectedMatch();
   if (state.activeTab === 'lineups') { renderLineups(state.detail); upgradeLineupPhotos(); }
   else if (state.activeTab === 'stats') renderStats(state.detail);
+  else if (state.activeTab === 'pitch') renderPitch(state.detail, m);
   else if (state.activeTab === 'table') renderTable(state.detail, m);
 }
 
