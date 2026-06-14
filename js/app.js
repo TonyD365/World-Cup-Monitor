@@ -251,6 +251,16 @@ async function poll() {
       const detail = await loadDetail(m);
       state.detail = detail;
       if (detail && detail.events && detail.events.length) m.events = detail.events;
+      // The summary header is the most current per-match state — override the
+      // (possibly stale) scoreboard/merge values for the selected match.
+      const L = detail && detail.live;
+      if (L) {
+        if (L.status) m.status = L.status;
+        m.minute = L.minute;
+        if (L.period) m.period = L.period;
+        if (L.homeScore != null) m.home.score = L.homeScore;
+        if (L.awayScore != null) m.away.score = L.awayScore;
+      }
     } else {
       state.detail = null;
     }

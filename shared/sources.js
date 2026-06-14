@@ -139,9 +139,9 @@ export async function fetchEspn(fetchImpl) {
         away: team(awayC),
         status: mapEspnStatus(st.state),
         minute: espnMinute(st.displayClock),
-        // Prefer a descriptive status (e.g. "Cooling Break", "Halftime",
-        // "Delayed") when present, else the short clock detail ("67'").
-        period: st.description || st.detail || st.shortDetail || null,
+        // shortDetail carries the clock/stoppage ("45'+2'", "HT", "FT", "67'");
+        // fall back to the wordier description.
+        period: st.shortDetail || st.description || null,
         venue: (comp.venue && comp.venue.fullName) || null,
         kickoff: ev.date || null,
         events,
@@ -167,6 +167,26 @@ export async function fetchEspnSummary(fetchImpl, eventId) {
     table: parseEspnTable(data),
     predictor: parseEspnPredictor(data),
     info: parseEspnInfo(data),
+    live: parseEspnLive(data),
+  };
+}
+
+// Authoritative live status/score/clock for this match from the summary header
+// (more current than the shared scoreboard list). Returns null if unavailable.
+function parseEspnLive(data) {
+  const comp = data.header && data.header.competitions && data.header.competitions[0];
+  if (!comp) return null;
+  const st = (comp.status && comp.status.type) || {};
+  const cs = comp.competitors || [];
+  const home = cs.find((c) => c.homeAway === 'home') || cs[0] || {};
+  const away = cs.find((c) => c.homeAway === 'away') || cs[1] || {};
+  const sc = (c) => (c && c.score != null && c.score !== '' ? Number(c.score) : null);
+  return {
+    status: mapEspnStatus(st.state),
+    minute: espnMinute(comp.status && comp.status.displayClock),
+    period: st.shortDetail || st.description || null,
+    homeScore: sc(home),
+    awayScore: sc(away),
   };
 }
 
