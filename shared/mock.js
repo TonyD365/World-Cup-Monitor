@@ -87,6 +87,7 @@ export function mockMatches() {
     const events = [];
     let hs = 0;
     let as = 0;
+    events.push({ min: 0, type: 'half', team: '', player: '', detail: 'Kick Off', source: 'mock' });
     // Replay events up to the current minute, deterministic by seed.
     for (let m = 3; m <= minute; m += 1) {
       const r = (m * 9301 + d.seed * 49297) % 233280;
@@ -104,6 +105,8 @@ export function mockMatches() {
         });
       }
     }
+    if (minute >= 45) events.push({ min: 45, type: 'half', team: '', player: '', detail: 'Half Time', source: 'mock' });
+    if (minute >= 90) events.push({ min: 90, type: 'half', team: '', player: '', detail: 'Full Time', source: 'mock' });
     return {
       id: d.id,
       comp: 'FIFA World Cup (DEMO)',

@@ -38,12 +38,59 @@ function mapEspnStatus(state) {
 }
 
 function espnEventType(typeTxt = '') {
-  const t = typeTxt.toLowerCase();
-  if (t.includes('goal') || t.includes('penalty - scored')) return 'goal';
+  const t = (typeTxt || '').toLowerCase();
+  // Phase markers first so "Kick Off" / "Goal Kick" aren't mistaken for goals.
+  if (
+    t.includes('kick off') || t.includes('kick-off') || t.includes('kickoff') ||
+    t.includes('half time') || t.includes('half-time') || t.includes('halftime') ||
+    t.includes('first half') || t.includes('second half') || t.includes('end of') ||
+    t.includes('full time') || t.includes('full-time') || t.includes('stoppage') ||
+    t.includes('added time') || t.includes('whistle') || t.includes('match ended')
+  ) return 'half';
+  if (t.includes('goal kick')) return 'info';
+  if (t.includes('own goal')) return 'goal';
+  if (t.includes('goal') || t.includes('penalty - scored') || t.includes('scored')) return 'goal';
+  if (t.includes('penalty - missed') || t.includes('penalty')) return 'penalty';
   if (t.includes('red')) return 'red';
-  if (t.includes('yellow')) return 'yellow';
-  if (t.includes('substitution')) return 'sub';
+  if (t.includes('yellow') || t.includes('booking') || t.includes('caution')) return 'yellow';
+  if (t.includes('substitution') || t.includes('sub ')) return 'sub';
+  if (t.includes('corner')) return 'corner';
+  if (t.includes('offside')) return 'offside';
+  if (t.includes('throw')) return 'throwin';
+  if (t.includes('free kick') || t.includes('free-kick')) return 'freekick';
+  if (t.includes('foul')) return 'foul';
+  if (t.includes('var') || t.includes('video review')) return 'var';
+  if (t.includes('save')) return 'save';
+  if (t.includes('shot') || t.includes('attempt') || t.includes('header')) return 'shot';
+  if (t.includes('half') || t.includes('whistle') || t.includes('kick-off') || t.includes('full time') || t.includes('full-time')) return 'half';
   return 'info';
+}
+
+function clockToMin(c) {
+  if (!c) return null;
+  const dv = typeof c === 'object' ? c.displayValue : c;
+  const n = parseInt(String(dv || ''), 10);
+  return isNaN(n) ? null : n;
+}
+
+// Resolve home/away team ids + abbreviations from the summary header.
+function teamSides(data) {
+  const comp = data.header && data.header.competitions && data.header.competitions[0];
+  const cs = (comp && comp.competitors) || [];
+  const r = { homeId: '', awayId: '', homeAbbr: '', awayAbbr: '' };
+  for (const c of cs) {
+    const id = String((c.team && c.team.id) || '');
+    const ab = (c.team && (c.team.abbreviation || c.team.displayName)) || '';
+    if (c.homeAway === 'home') { r.homeId = id; r.homeAbbr = ab; }
+    else if (c.homeAway === 'away') { r.awayId = id; r.awayAbbr = ab; }
+  }
+  return r;
+}
+function teamLabel(sides, id) {
+  const s = String(id || '');
+  if (s && s === sides.homeId) return sides.homeAbbr || 'H';
+  if (s && s === sides.awayId) return sides.awayAbbr || 'A';
+  return '';
 }
 
 // ---- ESPN -----------------------------------------------------------------
@@ -64,11 +111,15 @@ export async function fetchEspn(fetchImpl) {
         flag: (c.team && c.team.logo) || '',
         score: c.score != null ? Number(c.score) : null,
       });
+      // Map team id -> abbreviation so events show the team, not a numeric id.
+      const abbrById = {};
+      if (homeC.team) abbrById[String(homeC.team.id)] = homeC.team.abbreviation || homeC.team.displayName || '';
+      if (awayC.team) abbrById[String(awayC.team.id)] = awayC.team.abbreviation || awayC.team.displayName || '';
       const details = comp.details || [];
       const events = details.map((d) => ({
         min: d.clock && d.clock.displayValue ? parseInt(d.clock.displayValue, 10) || null : null,
         type: espnEventType((d.type && d.type.text) || ''),
-        team: (d.team && d.team.id) || '',
+        team: abbrById[String((d.team && d.team.id) || '')] || '',
         player:
           (d.athletesInvolved && d.athletesInvolved[0] && d.athletesInvolved[0].displayName) || '',
         detail: (d.type && d.type.text) || '',
@@ -109,42 +160,69 @@ export async function fetchEspnSummary(fetchImpl, eventId) {
 }
 
 function parseEspnEvents(data) {
-  const events = [];
-  const keyEvents = data.keyEvents || (data.commentary && data.commentary.filter((c) => c.play)) || [];
-  for (const k of keyEvents) {
+  const sides = teamSides(data);
+  const out = [];
+  const seen = new Set();
+  const add = (min, typeTxt, teamId, player, detail) => {
+    const type = espnEventType(typeTxt || detail || '');
+    const key = `${min}|${type}|${player}|${(detail || '').slice(0, 40)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ min, type, team: teamLabel(sides, teamId), player, detail: detail || typeTxt || '', source: 'espn' });
+  };
+
+  // keyEvents: structured goals/cards/subs (use boolean flags when present).
+  for (const k of data.keyEvents || []) {
     try {
-      events.push({
-        min: k.clock && k.clock.displayValue ? parseInt(k.clock.displayValue, 10) || null : null,
-        type: espnEventType((k.type && k.type.text) || ''),
-        team: (k.team && k.team.id) || '',
-        player:
-          (k.participants && k.participants[0] && k.participants[0].athlete &&
-            k.participants[0].athlete.displayName) || '',
-        detail: k.text || (k.type && k.type.text) || '',
-        source: 'espn',
-      });
+      const player =
+        (k.participants && k.participants[0] && k.participants[0].athlete &&
+          k.participants[0].athlete.displayName) || '';
+      let typeTxt = (k.type && k.type.text) || '';
+      if (k.scoringPlay || k.ownGoal) typeTxt = 'goal';
+      else if (k.redCard) typeTxt = 'red card';
+      else if (k.yellowCard) typeTxt = 'yellow card';
+      else if (k.substitution) typeTxt = 'substitution';
+      add(clockToMin(k.clock), typeTxt, k.team && k.team.id, player, k.text || (k.type && k.type.text) || '');
     } catch (_) {
       /* skip */
     }
   }
-  return events;
+
+  // commentary: full play-by-play (fouls, corners, throw-ins, offsides, …).
+  for (const c of data.commentary || []) {
+    try {
+      const play = c.play || {};
+      const typeTxt = (play.type && play.type.text) || c.text || '';
+      const teamId = (play.team && play.team.id) || '';
+      add(clockToMin(c.time || play.clock), typeTxt, teamId, '', c.text || (play.type && play.type.text) || '');
+    } catch (_) {
+      /* skip */
+    }
+  }
+
+  out.sort((a, b) => (a.min || 0) - (b.min || 0));
+  return out;
 }
 
 // Lineups: [{ side:'home'|'away', team, formation, starters:[{num,name,pos}], subs:[...] }]
 function parseEspnLineups(data) {
-  const rosters = data.rosters || [];
+  const sides = teamSides(data);
+  const rosters = data.rosters || (data.boxscore && data.boxscore.players) || [];
   const out = [];
   for (const r of rosters) {
     try {
-      const players = (r.roster || []).map((p) => ({
+      const players = (r.roster || r.athletes || []).map((p) => ({
         num: p.jersey || (p.athlete && p.athlete.jersey) || '',
-        name: (p.athlete && p.athlete.displayName) || '',
-        pos: (p.position && (p.position.abbreviation || p.position.name)) || '',
-        starter: !!p.starter,
-      }));
+        name: (p.athlete && p.athlete.displayName) || p.displayName || '',
+        pos: (p.position && (p.position.abbreviation || p.position.name)) ||
+          (p.athlete && p.athlete.position && p.athlete.position.abbreviation) || '',
+        starter: p.starter != null ? !!p.starter : true,
+      })).filter((p) => p.name);
+      const teamId = String((r.team && r.team.id) || '');
+      const side = r.homeAway === 'away' || (sides.awayId && teamId === sides.awayId) ? 'away' : 'home';
       out.push({
-        side: r.homeAway === 'away' ? 'away' : 'home',
-        team: (r.team && (r.team.displayName || r.team.abbreviation)) || '',
+        side,
+        team: (r.team && (r.team.displayName || r.team.shortDisplayName || r.team.name || r.team.abbreviation)) || '',
         formation: r.formation || (r.team && r.team.formation) || '',
         starters: players.filter((p) => p.starter),
         subs: players.filter((p) => !p.starter),
@@ -156,22 +234,22 @@ function parseEspnLineups(data) {
   return out;
 }
 
-// Stats: [{ label, home, away }] aligned across both teams.
+// Stats: [{ label, home, away }] aligned across both teams, mapped by team id.
 function parseEspnStats(data) {
+  const sides = teamSides(data);
   const teams = (data.boxscore && data.boxscore.teams) || [];
   if (teams.length < 2) return [];
-  const home = teams.find((t) => t.homeAway === 'home') || teams[0];
-  const away = teams.find((t) => t.homeAway === 'away') || teams[1];
+  const byId = (t) => String((t.team && t.team.id) || '');
+  let home = teams.find((t) => t.homeAway === 'home') || (sides.homeId && teams.find((t) => byId(t) === sides.homeId));
+  let away = teams.find((t) => t.homeAway === 'away') || (sides.awayId && teams.find((t) => byId(t) === sides.awayId));
+  if (!home || !away) { home = teams[0]; away = teams[1]; }
   const byLabel = {};
   const order = [];
   const ingest = (t, key) => {
     for (const s of (t && t.statistics) || []) {
-      const label = s.label || s.name || '';
+      const label = s.label || s.displayName || s.name || '';
       if (!label) continue;
-      if (!byLabel[label]) {
-        byLabel[label] = { label, home: '', away: '' };
-        order.push(label);
-      }
+      if (!byLabel[label]) { byLabel[label] = { label, home: '', away: '' }; order.push(label); }
       byLabel[label][key] = s.displayValue != null ? s.displayValue : s.value;
     }
   };
@@ -180,27 +258,54 @@ function parseEspnStats(data) {
   return order.map((l) => byLabel[l]);
 }
 
-// Group table from the summary's standings block, if present.
-// [{ team, abbr, p, w, d, l, gd, pts, highlight }]
+// Read a stat value from an entry's stats[] by trying several ESPN field names.
+function statBy(stats, names) {
+  for (const n of names) {
+    if (stats[n] != null && stats[n] !== '') return stats[n];
+  }
+  return '';
+}
+
+// Group table from the summary's standings block. Robustly digs out the
+// entries array and the team name (ESPN nests/labels these inconsistently).
 function parseEspnTable(data) {
-  const st = data.standings;
-  const groups = (st && st.groups) || (st && [st]) || [];
+  const entryGroups = [];
+  const visit = (node, depth) => {
+    if (!node || typeof node !== 'object' || depth > 6) return;
+    if (Array.isArray(node.entries) && node.entries.some((e) => e && e.team)) entryGroups.push(node.entries);
+    for (const k of Object.keys(node)) {
+      const v = node[k];
+      if (v && typeof v === 'object') visit(v, depth + 1);
+    }
+  };
+  visit(data.standings, 0);
   const rows = [];
-  for (const g of groups) {
-    const entries = (g && g.standings && g.standings.entries) || (g && g.entries) || [];
+  const seen = new Set();
+  for (const entries of entryGroups) {
     for (const e of entries) {
       try {
+        const t = e.team || {};
+        const name = t.displayName || t.shortDisplayName || t.name || t.location || t.abbreviation || '';
+        const abbr = t.abbreviation || t.shortDisplayName || name;
+        const id = String(t.id || name);
+        if (!name || seen.has(id)) continue;
+        seen.add(id);
         const stats = {};
-        for (const s of e.stats || []) stats[s.name || s.type] = s.displayValue != null ? s.displayValue : s.value;
+        for (const s of e.stats || []) {
+          const dv = s.displayValue != null ? s.displayValue : s.value;
+          if (s.name) stats[s.name] = dv;
+          if (s.type) stats[s.type] = dv;
+          if (s.abbreviation) stats[s.abbreviation] = dv;
+        }
         rows.push({
-          team: (e.team && (e.team.displayName || e.team.name)) || '',
-          abbr: (e.team && e.team.abbreviation) || '',
-          p: stats.gamesPlayed ?? stats.games ?? '',
-          w: stats.wins ?? '',
-          d: stats.ties ?? stats.draws ?? '',
-          l: stats.losses ?? '',
-          gd: stats.pointDifferential ?? stats.goalDifference ?? '',
-          pts: stats.points ?? '',
+          team: name,
+          abbr,
+          p: statBy(stats, ['gamesPlayed', 'games', 'GP']),
+          w: statBy(stats, ['wins', 'W']),
+          d: statBy(stats, ['ties', 'draws', 'D']),
+          l: statBy(stats, ['losses', 'L']),
+          gd: statBy(stats, ['pointDifferential', 'goalDifference', 'GD']),
+          pts: statBy(stats, ['points', 'PTS', 'rank']),
         });
       } catch (_) {
         /* skip */

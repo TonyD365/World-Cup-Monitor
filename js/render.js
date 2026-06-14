@@ -1,7 +1,13 @@
 // js/render.js — DOM rendering for the monitor. All UI text is English.
 import { buildSelector } from '../shared/core.js';
 
-const EVENT_ICON = { goal: '⚽', yellow: '🟨', red: '🟥', sub: '⇄', info: '›' };
+const EVENT_ICON = {
+  goal: '⚽', yellow: '🟨', red: '🟥', sub: '⇄', penalty: '🥅', corner: '🚩',
+  foul: '⚠', offside: '🏴', throwin: '↪', freekick: '◎', var: '📺', save: '🧤',
+  shot: '🎯', half: '⏱', info: '·',
+};
+// Phase markers get a prominent, centered divider style.
+const PHASE_TYPES = new Set(['half']);
 
 function el(id) {
   return document.getElementById(id);
@@ -39,12 +45,21 @@ export function renderSelector(matches, selectedId) {
   return sel.value || defaultId || null;
 }
 
+// One stat row: label centered on its own line, values on the sides, bar below.
+function statItem(label, homeVal, awayVal, homeNum, awayNum) {
+  const tot = (homeNum || 0) + (awayNum || 0) || 1;
+  const hw = (100 * (homeNum || 0)) / tot;
+  const aw = (100 * (awayNum || 0)) / tot;
+  return `<div class="stat-item">
+    <div class="stat-top"><span class="stat-h">${homeVal}</span><span class="stat-name">${label}</span><span class="stat-a">${awayVal}</span></div>
+    <div class="stat-bar"><div class="stat-fill-h" style="width:${hw}%"></div><div class="stat-fill-a" style="width:${aw}%"></div></div>
+  </div>`;
+}
+
 function bar(label, pctHome, pctAway) {
   const h = Math.max(0, Math.min(100, pctHome || 0));
   const a = Math.max(0, Math.min(100, pctAway || 0));
-  return `<div class="stat-row"><span class="stat-h">${h}%</span>
-    <div class="stat-bar"><div class="stat-fill-h" style="width:${h}%"></div><div class="stat-fill-a" style="width:${a}%"></div></div>
-    <span class="stat-a">${a}%</span><span class="stat-label">${label}</span></div>`;
+  return statItem(label, `${h}%`, `${a}%`, h, a);
 }
 
 function srcTag(m, field) {
@@ -103,14 +118,24 @@ export function renderEventLog(m, shownKeys) {
   const evs = (m.events || []).slice().sort((a, b) => (a.min || 0) - (b.min || 0));
   let appended = false;
   for (const ev of evs) {
-    const key = `${m.id}|${ev.min}|${ev.type}|${ev.player}`;
+    const key = `${m.id}|${ev.min}|${ev.type}|${ev.player}|${(ev.detail || '').slice(0, 30)}`;
     if (shownKeys.has(key)) continue;
     shownKeys.add(key);
     appended = true;
     const line = document.createElement('div');
-    line.className = `log-line type-${ev.type} flash`;
-    const ts = String(ev.min ?? '--').padStart(2, '0');
-    line.innerHTML = `<span class="log-ts">[${ts}']</span> ${EVENT_ICON[ev.type] || '›'} <span class="log-type">${ev.type.toUpperCase()}</span> <span class="log-team">${ev.team || ''}</span> ${ev.player || ''} <span class="log-detail">${ev.detail || ''}</span> <span class="src src-${ev.source}">${ev.source}</span>`;
+    const ts = ev.min != null ? `${ev.min}'` : '';
+    const icon = EVENT_ICON[ev.type] || '·';
+
+    if (PHASE_TYPES.has(ev.type)) {
+      // Kick-off / half-time / stoppage / full-time: prominent + centered.
+      line.className = 'log-line phase flash';
+      line.innerHTML = `${icon} <span class="phase-text">${esc((ev.detail || '').toUpperCase())}</span> ${ts ? `<span class="phase-min">${ts}</span>` : ''} ${icon}`;
+    } else {
+      line.className = `log-line type-${ev.type} flash`;
+      const team = ev.team ? `<span class="log-team">[${esc(ev.team)}]</span>` : '';
+      const who = ev.player ? `<span class="log-player">${esc(ev.player)}</span>` : '';
+      line.innerHTML = `<span class="log-ts">${ts ? '[' + ts + ']' : ''}</span> ${icon} <span class="log-type">${esc(ev.type.toUpperCase())}</span> ${team} ${who} <span class="log-detail">${esc(ev.detail || '')}</span>`;
+    }
     log.appendChild(line);
   }
   if (appended) log.scrollTop = log.scrollHeight;
@@ -152,16 +177,7 @@ export function renderStats(detail) {
     return isNaN(n) ? 0 : n;
   };
   v.innerHTML = stats
-    .map((s) => {
-      const h = num(s.home);
-      const a = num(s.away);
-      const tot = h + a || 1;
-      return `<div class="stat-row">
-        <span class="stat-h">${esc(s.home)}</span>
-        <div class="stat-bar"><div class="stat-fill-h" style="width:${(100 * h) / tot}%"></div><div class="stat-fill-a" style="width:${(100 * a) / tot}%"></div></div>
-        <span class="stat-a">${esc(s.away)}</span>
-        <span class="stat-label">${esc(s.label)}</span></div>`;
-    })
+    .map((s) => statItem(esc(s.label), esc(s.home), esc(s.away), num(s.home), num(s.away)))
     .join('');
 }
 
