@@ -88,6 +88,14 @@ export function mockDetail(match) {
       { label: 'Corners', home: 4, away: 3 },
       { label: 'Fouls', home: 8, away: 11 },
     ],
+    predictor: { home: 48, draw: 27, away: 25 },
+    info: {
+      venue: match.venue || 'Demo Stadium',
+      city: 'Demo City',
+      attendance: 68000,
+      referee: 'A. Referee',
+      weather: '22° Clear',
+    },
     table: [
       {
         name: 'Group X (DEMO)',

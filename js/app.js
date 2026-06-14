@@ -15,20 +15,25 @@ import {
   renderStats,
   renderTable,
   renderTeamSummary,
+  renderMatchExtra,
 } from './render.js';
 
 const state = {
   matches: [],
   selectedId: null,
   shownKeys: new Set(), // event log de-dup keys
-  detail: null, // last loaded { events, lineups, stats, table }
+  detail: null, // last loaded detail object
   activeTab: 'timeline',
   startedAt: Date.now(),
   nextPollAt: 0,
-  clockSyncedAt: Date.now(), // when the selected match's minute was last refreshed
+  clockSyncedAt: Date.now(),
+  prevScores: new Map(), // matchId -> {total,h,a} for goal detection (all matches)
+  prevSel: null, // {id,h,a} for flip animation on the selected scoreboard
+  alertsOn: false,
+  audioCtx: null,
 };
 
-// Build the match-clock string shown above the score.
+// ---- match clock -----------------------------------------------------------
 // States: NOT STARTED / HALF TIME / COOLING BREAK / 45:00 (+x) / 90:00 (+x) / FULL TIME
 function clockText(m) {
   if (!m) return '';
@@ -36,31 +41,25 @@ function clockText(m) {
   if (m.status === 'ft') return 'FULL TIME';
   const period = String(m.period || '');
   const p = period.toLowerCase();
-  // Half-time (HT, no running minute).
   if (/\bht\b|half[\s-]?time/.test(p) && !/\d/.test(p)) return 'HALF TIME';
-  // Cooling / water break.
   if (/cool|water|drink|break/.test(p)) return 'COOLING BREAK';
-  // Stoppage / added time: period like "45'+2'" or "90'+3'".
   const stop = /(\d+)\s*'?\s*\+\s*(\d+)/.exec(period);
   if (stop) {
     const base = parseInt(stop[1], 10);
     const anchor = base >= 46 ? 90 : 45;
     return `${anchor}:00 (+${stop[2]})`;
   }
-  // Normal live: tick MM:SS.
   let total;
   if (m.minute != null) {
-    // Anchor to ESPN's reported minute, interpolate seconds since last poll.
     const secs = Math.floor((Date.now() - state.clockSyncedAt) / 1000);
     total = m.minute * 60 + Math.max(0, Math.min(secs, 120));
     const cap = m.minute < 45 ? 45 * 60 : m.minute < 90 ? 90 * 60 : (m.minute + 1) * 60;
     if (total > cap) total = cap;
   } else {
-    // No minute from the feed (e.g. just kicked off): derive from kickoff time.
     const ko = Date.parse(m.kickoff);
     if (isNaN(ko)) return 'LIVE';
     total = Math.max(0, Math.floor((Date.now() - ko) / 1000));
-    if (total > 45 * 60) total = 45 * 60; // don't overrun into 2nd half blindly
+    if (total > 45 * 60) total = 45 * 60;
   }
   const mm = String(Math.floor(total / 60)).padStart(2, '0');
   const ss = String(total % 60).padStart(2, '0');
@@ -72,7 +71,6 @@ function renderClock() {
   if (!elc) return;
   const m = selectedMatch();
   const txt = clockText(m);
-  // Only touch the DOM when the value changes (avoids needless mutations).
   if (elc.textContent !== txt) elc.textContent = txt;
   const cls = 'sb-clock' + (m && m.status === 'live' ? ' live' : '');
   if (elc.className !== cls) elc.className = cls;
@@ -82,6 +80,99 @@ function selectedMatch() {
   return state.matches.find((m) => m.id === state.selectedId) || null;
 }
 
+// ---- goal alerts -----------------------------------------------------------
+function matchTotal(m) {
+  return (m.home.score || 0) + (m.away.score || 0);
+}
+
+// Compare each match's score to the previous poll; return goals scored.
+function detectGoals(matches) {
+  const goals = [];
+  for (const m of matches) {
+    const total = matchTotal(m);
+    const prev = state.prevScores.get(m.id);
+    if (prev && total > prev.total && (m.status === 'live' || m.status === 'ft')) {
+      const hs = m.home.score || 0;
+      const as = m.away.score || 0;
+      const team = hs > prev.h ? m.home : m.away;
+      goals.push({ m, team, hs, as });
+    }
+    state.prevScores.set(m.id, { total, h: m.home.score || 0, a: m.away.score || 0 });
+  }
+  return goals;
+}
+
+function ensureAudio() {
+  if (!state.audioCtx) {
+    try {
+      state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (_) { /* unsupported */ }
+  }
+  if (state.audioCtx && state.audioCtx.state === 'suspended') state.audioCtx.resume();
+}
+
+function beep() {
+  ensureAudio();
+  const c = state.audioCtx;
+  if (!c) return;
+  const now = c.currentTime;
+  [0, 0.18].forEach((t, i) => {
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = 'square';
+    o.frequency.value = i ? 880 : 620;
+    o.connect(g); g.connect(c.destination);
+    g.gain.setValueAtTime(0.0001, now + t);
+    g.gain.exponentialRampToValueAtTime(0.22, now + t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.16);
+    o.start(now + t); o.stop(now + t + 0.18);
+  });
+}
+
+function notifyGoal(text) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try { new Notification('⚽ GOAL', { body: text }); } catch (_) { /* ignore */ }
+}
+
+function goalFlash() {
+  const s = document.getElementById('screen');
+  if (!s) return;
+  s.classList.remove('goal-flash');
+  void s.offsetWidth;
+  s.classList.add('goal-flash');
+}
+
+function setAlerts(on) {
+  state.alertsOn = on;
+  try { localStorage.setItem('wc_alerts', on ? '1' : '0'); } catch (_) { /* ignore */ }
+  const b = document.getElementById('alert-toggle');
+  if (b) { b.textContent = `🔔 ALERTS: ${on ? 'ON' : 'OFF'}`; b.classList.toggle('on', on); }
+  if (on) {
+    ensureAudio();
+    if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+  }
+}
+
+// ---- flip-board score animation -------------------------------------------
+function flipEl(id) {
+  const e = document.getElementById(id);
+  if (!e) return;
+  e.classList.remove('flip');
+  void e.offsetWidth; // restart animation
+  e.classList.add('flip');
+}
+function flipScoreIfChanged(m) {
+  if (!m) { state.prevSel = null; return; }
+  const h = m.home.score;
+  const a = m.away.score;
+  if (state.prevSel && state.prevSel.id === m.id) {
+    if (state.prevSel.h !== h) flipEl('score-h');
+    if (state.prevSel.a !== a) flipEl('score-a');
+  }
+  state.prevSel = { id: m.id, h, a };
+}
+
+// ---- tabs ------------------------------------------------------------------
 function showTab(tab) {
   state.activeTab = tab;
   for (const btn of document.querySelectorAll('.tab')) {
@@ -98,7 +189,17 @@ function renderActiveTab() {
   if (state.activeTab === 'lineups') renderLineups(state.detail);
   else if (state.activeTab === 'stats') renderStats(state.detail);
   else if (state.activeTab === 'table') renderTable(state.detail, m);
-  // timeline is rendered incrementally via renderEventLog
+}
+
+// Render the selected match's scoreboard + all dependent panels.
+function renderSelected(m) {
+  renderScoreboard(m);
+  flipScoreIfChanged(m);
+  renderClock();
+  renderTeamSummary(m, state.detail);
+  renderMatchExtra(m, state.detail);
+  renderEventLog(m, state.shownKeys);
+  renderActiveTab();
 }
 
 async function poll() {
@@ -109,6 +210,18 @@ async function poll() {
     renderAuthority(authority);
     renderHealth(health);
 
+    // Goal detection across ALL matches (not just the selected one).
+    const goals = detectGoals(matches);
+    if (goals.length) {
+      goalFlash();
+      if (state.alertsOn) {
+        beep();
+        for (const g of goals) {
+          notifyGoal(`${g.team.name} — ${g.m.home.abbr || g.m.home.name} ${g.hs}-${g.as} ${g.m.away.abbr || g.m.away.name}`);
+        }
+      }
+    }
+
     const newSelected = renderMatchStrip(matches, state.selectedId);
     if (newSelected !== state.selectedId) {
       state.selectedId = newSelected;
@@ -117,30 +230,19 @@ async function poll() {
     }
 
     const m = selectedMatch();
-    // Best-effort richer detail (events / lineups / stats / table) for selection.
     if (m) {
       const detail = await loadDetail(m);
       state.detail = detail;
-      // The summary commentary is the full timeline (goals, cards, subs, fouls,
-      // corners, throw-ins, …) — use it as the base when available; otherwise
-      // keep the scoreboard's (goals-only) events.
-      if (detail && detail.events && detail.events.length) {
-        m.events = detail.events;
-      }
+      if (detail && detail.events && detail.events.length) m.events = detail.events;
     } else {
       state.detail = null;
     }
 
     state.clockSyncedAt = Date.now();
-    renderScoreboard(m);
-    renderClock();
-    renderTeamSummary(m, state.detail);
-    renderEventLog(m, state.shownKeys);
-    renderActiveTab();
+    renderSelected(m);
     setLastPoll(new Date());
     refreshFlash();
   } catch (err) {
-    // Never let the loop die.
     console.error('poll error', err);
   } finally {
     state.nextPollAt = Date.now() + CONFIG.POLL_INTERVAL;
@@ -162,7 +264,7 @@ function tickUptime() {
   const cd = document.getElementById('next-poll');
   if (cd) cd.textContent = `${(remain / 1000).toFixed(1)}s`;
 
-  renderClock(); // tick the match clock between polls
+  renderClock();
 }
 
 function init() {
@@ -172,20 +274,21 @@ function init() {
     state.selectedId = box.dataset.id;
     state.shownKeys.clear();
     state.detail = null;
+    state.prevSel = null;
     state.clockSyncedAt = Date.now();
     clearEventLog();
     renderMatchStrip(state.matches, state.selectedId);
-    renderScoreboard(selectedMatch());
-    renderClock();
-    renderTeamSummary(selectedMatch(), state.detail);
-    renderEventLog(selectedMatch(), state.shownKeys);
-    renderActiveTab();
+    renderSelected(selectedMatch());
     poll(); // fetch detail for the newly selected match right away
   });
 
   for (const btn of document.querySelectorAll('.tab')) {
     btn.addEventListener('click', () => showTab(btn.dataset.tab));
   }
+
+  const at = document.getElementById('alert-toggle');
+  if (at) at.addEventListener('click', () => setAlerts(!state.alertsOn));
+  try { if (localStorage.getItem('wc_alerts') === '1') setAlerts(true); } catch (_) { /* ignore */ }
 
   state.nextPollAt = Date.now() + CONFIG.POLL_INTERVAL;
   poll();

@@ -106,7 +106,7 @@ export function renderScoreboard(m) {
         <div class="sb-flag" translate="no">${m.home.flag && m.home.flag.length <= 4 ? m.home.flag : ''}</div>
         <div class="sb-name">${esc(m.home.name || m.home.abbr)}</div>
       </div>
-      <div class="sb-score" translate="no">${m.home.score ?? '-'} <span class="sb-dash">:</span> ${m.away.score ?? '-'}</div>
+      <div class="sb-score" translate="no"><span class="flip-num" id="score-h">${m.home.score ?? '-'}</span><span class="sb-dash">:</span><span class="flip-num" id="score-a">${m.away.score ?? '-'}</span></div>
       <div class="sb-team away">
         <div class="sb-flag" translate="no">${m.away.flag && m.away.flag.length <= 4 ? m.away.flag : ''}</div>
         <div class="sb-name">${esc(m.away.name || m.away.abbr)}</div>
@@ -114,6 +114,7 @@ export function renderScoreboard(m) {
     </div>
     <div class="sb-venue">${m.venue ? '@ ' + esc(m.venue) : ''}</div>
     <div class="sb-summary" id="sb-summary" translate="no"></div>
+    <div class="sb-extra" id="sb-extra"></div>
     ${hasStats ? `<div class="sb-stats">
         ${stats.possessionHome != null ? bar('POSSESSION', stats.possessionHome, stats.possessionAway) : ''}
         ${stats.shotsHome != null ? bar('SHOTS', stats.shotsHome, stats.shotsAway) : ''}
@@ -154,6 +155,32 @@ export function renderTeamSummary(m, detail) {
     row('Subs Left', subsLeft(ha), subsLeft(aa)) +
     `</div>`;
   // #sb-summary is translate="no", so rewriting it never causes Translate flicker.
+  if (box.innerHTML !== html) box.innerHTML = html;
+}
+
+// Win-probability bar + match info (referee / attendance / weather), below score.
+export function renderMatchExtra(m, detail) {
+  const box = el('sb-extra');
+  if (!box) return;
+  if (!m || !detail) { if (box.innerHTML) box.innerHTML = ''; return; }
+  let html = '';
+  const p = detail.predictor;
+  if (p && (p.home || p.away)) {
+    html += `<div class="wp">
+      <div class="wp-head">WIN PROBABILITY</div>
+      <div class="wp-bar"><div class="wp-h" style="width:${p.home}%"></div><div class="wp-d" style="width:${p.draw}%"></div><div class="wp-a" style="width:${p.away}%"></div></div>
+      <div class="wp-legend" translate="no"><span class="wp-lh">${esc(m.home.abbr || m.home.name)} ${p.home}%</span><span class="wp-ld">Draw ${p.draw}%</span><span class="wp-la">${esc(m.away.abbr || m.away.name)} ${p.away}%</span></div>
+    </div>`;
+  }
+  const i = detail.info;
+  if (i && (i.referee || i.attendance || i.weather || i.city)) {
+    const bits = [];
+    if (i.referee) bits.push(`REF: <span translate="no">${esc(i.referee)}</span>`);
+    if (i.attendance) bits.push(`ATT: <span translate="no">${esc(Number(i.attendance).toLocaleString())}</span>`);
+    if (i.weather) bits.push(`WX: <span translate="no">${esc(i.weather)}</span>`);
+    if (i.city) bits.push(`<span translate="no">${esc(i.city)}</span>`);
+    html += `<div class="minfo">${bits.join(' · ')}</div>`;
+  }
   if (box.innerHTML !== html) box.innerHTML = html;
 }
 

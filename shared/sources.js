@@ -163,6 +163,46 @@ export async function fetchEspnSummary(fetchImpl, eventId) {
     lineups: parseEspnLineups(data),
     stats: parseEspnStats(data),
     table: parseEspnTable(data),
+    predictor: parseEspnPredictor(data),
+    info: parseEspnInfo(data),
+  };
+}
+
+// Win probability {home, draw, away} as integer percentages, or null.
+function parseEspnPredictor(data) {
+  const p = data.predictor;
+  if (!p) return null;
+  const sides = teamSides(data);
+  const num = (x) => {
+    const n = parseFloat(String(x));
+    return isNaN(n) ? null : n;
+  };
+  const a = p.homeTeam || {};
+  const b = p.awayTeam || {};
+  // ESPN labels predictor teams by id; map to actual home/away.
+  let home = num(a.gameProjection);
+  let away = num(b.gameProjection);
+  if (String(a.id) === sides.awayId) { const t = home; home = away; away = t; }
+  if (home == null || away == null) return null;
+  const draw = Math.max(0, Math.round(100 - home - away));
+  return { home: Math.round(home), draw, away: Math.round(away) };
+}
+
+// Match info: venue, attendance, referee, weather.
+function parseEspnInfo(data) {
+  const gi = data.gameInfo || {};
+  const venue = gi.venue || {};
+  const city = (venue.address && (venue.address.city || venue.address.country)) || '';
+  const officials = gi.officials || [];
+  const ref = (officials.find((o) => /referee/i.test((o.position && o.position.name) || '')) || officials[0] || {}).displayName || '';
+  const w = gi.weather || {};
+  const weather = w.displayValue || (w.temperature != null ? `${w.temperature}°` : '');
+  return {
+    venue: venue.fullName || '',
+    city,
+    attendance: gi.attendance != null ? gi.attendance : '',
+    referee: ref,
+    weather,
   };
 }
 
