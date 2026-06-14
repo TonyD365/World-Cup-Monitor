@@ -145,6 +145,48 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 }
 #poll-progress { height: 100%; width: 0; background: var(--green); box-shadow: 0 0 6px var(--green); }
 
+/* Match timeline strip: horizontal, time-sorted boxes above a timeline line */
+.strip-wrap { overflow-x: auto; padding-bottom: 6px; margin-bottom: 14px; }
+.match-strip {
+  display: flex; gap: 12px; position: relative; padding: 16px 6px 10px;
+  min-height: 96px; align-items: stretch;
+}
+.match-strip::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 10px; height: 2px;
+  background: linear-gradient(to right, transparent, var(--green-dim), transparent);
+}
+.match-box {
+  position: relative; flex: 0 0 auto; min-width: 130px;
+  background: var(--panel); border: 1px solid var(--border); color: var(--green);
+  font-family: var(--mono); text-align: left; cursor: pointer; padding: 8px 10px;
+  margin-top: 8px;
+}
+.match-box::before {
+  content: ''; position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
+  width: 7px; height: 7px; border-radius: 50%; background: var(--green-dim);
+}
+.match-box:hover { border-color: var(--green); }
+.match-box.active {
+  border-color: var(--green); background: #06210f; box-shadow: 0 0 12px var(--green-dim);
+}
+.match-box.active::before { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.mb-day { color: var(--green-dim); font-size: 10px; text-transform: uppercase; }
+.mb-time { color: var(--amber); font-size: 12px; margin-bottom: 4px; white-space: nowrap; }
+.mb-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.mb-team { color: var(--green-soft); }
+.mb-sc { color: var(--green); font-weight: bold; }
+.mb-tag { margin-top: 4px; font-size: 11px; }
+.mb-tag.live { color: var(--red); font-weight: bold; }
+.mb-tag.ft { color: var(--green-dim); }
+.mb-tag.pre { color: var(--amber); }
+
+/* Match clock above the score */
+.sb-clock {
+  text-align: center; font-size: 30px; color: var(--green); letter-spacing: 2px;
+  margin: 4px 0 6px; min-height: 34px; text-shadow: 0 0 10px var(--green-dim);
+}
+.sb-clock.live { color: var(--amber); text-shadow: 0 0 12px var(--amber); }
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

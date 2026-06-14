@@ -19,30 +19,56 @@ function statusLabel(m) {
   return 'SCHEDULED';
 }
 
-// Populate the dropdown. Shows live matches when any are live, otherwise recent
-// results + upcoming fixtures. Returns the id that should be selected.
-export function renderSelector(matches, selectedId) {
-  const sel = el('match-select');
+// Render matches as a horizontal, time-sorted timeline of clickable boxes.
+// Returns the id that should be selected.
+export function renderMatchStrip(matches, selectedId) {
+  const strip = el('match-strip');
   const { list, defaultId } = buildSelector(matches);
-  const prev = selectedId || sel.value;
-  sel.innerHTML = '';
-  for (const m of list) {
-    const o = document.createElement('option');
-    o.value = m.id;
-    const h = m.home.abbr || m.home.name;
-    const a = m.away.abbr || m.away.name;
-    let tag;
-    if (m.status === 'live') tag = m.minute ? `${m.minute}'` : 'LIVE';
-    else if (m.status === 'ft') tag = 'FT';
-    else tag = 'SCHED';
-    const score =
-      m.home.score != null || m.away.score != null ? ` ${m.home.score ?? 0}-${m.away.score ?? 0}` : '';
-    o.textContent = `${h} v ${a}${score} · ${tag}`;
-    sel.appendChild(o);
-  }
-  const keep = list.some((m) => m.id === prev) ? prev : defaultId;
-  if (keep) sel.value = keep;
-  return sel.value || defaultId || null;
+  const sorted = list.slice().sort((a, b) => {
+    const ta = Date.parse(a.kickoff) || 0;
+    const tb = Date.parse(b.kickoff) || 0;
+    return ta - tb;
+  });
+  const sel = selectedId && list.some((m) => m.id === selectedId) ? selectedId : defaultId;
+
+  const fmtTime = (d) => {
+    if (isNaN(d)) return '--:--';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  };
+  const fmtDay = (iso) => {
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+  // Estimated end ≈ kickoff + 115 min (2×45 + 15 break + ~10 stoppage).
+  const timeRange = (iso) => {
+    const start = new Date(iso);
+    if (isNaN(start)) return '--:--';
+    const end = new Date(start.getTime() + 115 * 60000);
+    return `${fmtTime(start)}–${fmtTime(end)}`;
+  };
+
+  strip.innerHTML = sorted
+    .map((m) => {
+      const h = esc(m.home.abbr || m.home.name);
+      const a = esc(m.away.abbr || m.away.name);
+      const hs = m.home.score != null ? m.home.score : '-';
+      const as = m.away.score != null ? m.away.score : '-';
+      let tag;
+      let cls;
+      if (m.status === 'live') { tag = m.minute ? `${m.minute}'` : 'LIVE'; cls = 'live'; }
+      else if (m.status === 'ft') { tag = 'FT'; cls = 'ft'; }
+      else { tag = 'SCHED'; cls = 'pre'; }
+      return `<button class="match-box ${m.id === sel ? 'active' : ''}" data-id="${esc(m.id)}">
+        <div class="mb-day">${fmtDay(m.kickoff)}</div>
+        <div class="mb-time">${timeRange(m.kickoff)}</div>
+        <div class="mb-row"><span class="mb-team">${h}</span><span class="mb-sc">${hs}</span></div>
+        <div class="mb-row"><span class="mb-team">${a}</span><span class="mb-sc">${as}</span></div>
+        <div class="mb-tag ${cls}">${tag}</div>
+      </button>`;
+    })
+    .join('') || '<span class="empty">// NO MATCHES</span>';
+  return sel || null;
 }
 
 // One stat row: label centered on its own line, values on the sides, bar below.
@@ -62,10 +88,6 @@ function bar(label, pctHome, pctAway) {
   return statItem(label, `${h}%`, `${a}%`, h, a);
 }
 
-function srcTag(m, field) {
-  const s = m.fieldSources && m.fieldSources[field];
-  return s ? `<sup class="src src-${s}">${s}</sup>` : '';
-}
 
 export function renderScoreboard(m) {
   const panel = el('scoreboard');
@@ -77,15 +99,16 @@ export function renderScoreboard(m) {
   const hasStats = stats.possessionHome != null || stats.shotsHome != null;
   panel.innerHTML = `
     <div class="sb-status">${statusLabel(m)} <span class="sb-comp">${m.comp || ''}</span></div>
+    <div class="sb-clock" id="sb-clock"></div>
     <div class="sb-main">
       <div class="sb-team home">
         <div class="sb-flag">${m.home.flag && m.home.flag.length <= 4 ? m.home.flag : ''}</div>
-        <div class="sb-name">${m.home.name || m.home.abbr}${srcTag(m, 'home.name')}</div>
+        <div class="sb-name">${m.home.name || m.home.abbr}</div>
       </div>
-      <div class="sb-score">${m.home.score ?? '-'} <span class="sb-dash">:</span> ${m.away.score ?? '-'}${srcTag(m, 'home.score')}</div>
+      <div class="sb-score">${m.home.score ?? '-'} <span class="sb-dash">:</span> ${m.away.score ?? '-'}</div>
       <div class="sb-team away">
         <div class="sb-flag">${m.away.flag && m.away.flag.length <= 4 ? m.away.flag : ''}</div>
-        <div class="sb-name">${m.away.name || m.away.abbr}${srcTag(m, 'away.name')}</div>
+        <div class="sb-name">${m.away.name || m.away.abbr}</div>
       </div>
     </div>
     <div class="sb-venue">${m.venue ? '@ ' + m.venue : ''}</div>

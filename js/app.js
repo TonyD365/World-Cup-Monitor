@@ -2,7 +2,7 @@
 import { CONFIG } from './config.js';
 import { loadMatches, loadDetail, health } from './data.js';
 import {
-  renderSelector,
+  renderMatchStrip,
   renderScoreboard,
   renderEventLog,
   clearEventLog,
@@ -24,7 +24,47 @@ const state = {
   activeTab: 'timeline',
   startedAt: Date.now(),
   nextPollAt: 0,
+  clockSyncedAt: Date.now(), // when the selected match's minute was last refreshed
 };
+
+// Build the match-clock string shown above the score.
+// States (as requested): 未开赛 / 中场休息 / 补水时间 / 45:00 (+x) / 90:00 (+x) / 结束了
+function clockText(m) {
+  if (!m) return '';
+  if (m.status === 'pre') return '未开赛';
+  if (m.status === 'ft') return '结束了';
+  const period = String(m.period || '');
+  const p = period.toLowerCase();
+  // Half-time (HT, no running minute).
+  if (/\bht\b|half[\s-]?time/.test(p) && !/\d/.test(p)) return '中场休息';
+  // Cooling / water break.
+  if (/cool|water|drink|break/.test(p)) return '补水时间';
+  // Stoppage / added time: period like "45'+2'" or "90'+3'".
+  const stop = /(\d+)\s*'?\s*\+\s*(\d+)/.exec(period);
+  if (stop) {
+    const base = parseInt(stop[1], 10);
+    const anchor = base >= 46 ? 90 : 45;
+    return `${anchor}:00 (+${stop[2]})`;
+  }
+  // Normal live: tick MM:SS from the last synced minute.
+  if (m.minute == null) return '进行中';
+  const secs = Math.floor((Date.now() - state.clockSyncedAt) / 1000);
+  let total = m.minute * 60 + Math.max(0, Math.min(secs, 600));
+  const cap = m.minute <= 45 ? 45 * 60 : 90 * 60;
+  if (total > cap) total = cap;
+  const mm = String(Math.floor(total / 60)).padStart(2, '0');
+  const ss = String(total % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+}
+
+function renderClock() {
+  const elc = document.getElementById('sb-clock');
+  if (!elc) return;
+  const m = selectedMatch();
+  const txt = clockText(m);
+  elc.textContent = txt;
+  elc.className = 'sb-clock' + (m && m.status === 'live' ? ' live' : '');
+}
 
 function selectedMatch() {
   return state.matches.find((m) => m.id === state.selectedId) || null;
@@ -57,7 +97,7 @@ async function poll() {
     renderAuthority(authority);
     renderHealth(health);
 
-    const newSelected = renderSelector(matches, state.selectedId);
+    const newSelected = renderMatchStrip(matches, state.selectedId);
     if (newSelected !== state.selectedId) {
       state.selectedId = newSelected;
       state.shownKeys.clear();
@@ -79,7 +119,9 @@ async function poll() {
       state.detail = null;
     }
 
+    state.clockSyncedAt = Date.now();
     renderScoreboard(m);
+    renderClock();
     renderEventLog(m, state.shownKeys);
     renderActiveTab();
     setLastPoll(new Date());
@@ -106,15 +148,22 @@ function tickUptime() {
   if (bar) bar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
   const cd = document.getElementById('next-poll');
   if (cd) cd.textContent = `${(remain / 1000).toFixed(1)}s`;
+
+  renderClock(); // tick the match clock between polls
 }
 
 function init() {
-  document.getElementById('match-select').addEventListener('change', (e) => {
-    state.selectedId = e.target.value;
+  document.getElementById('match-strip').addEventListener('click', (e) => {
+    const box = e.target.closest('.match-box');
+    if (!box) return;
+    state.selectedId = box.dataset.id;
     state.shownKeys.clear();
     state.detail = null;
+    state.clockSyncedAt = Date.now();
     clearEventLog();
+    renderMatchStrip(state.matches, state.selectedId);
     renderScoreboard(selectedMatch());
+    renderClock();
     renderEventLog(selectedMatch(), state.shownKeys);
     renderActiveTab();
     poll(); // fetch detail for the newly selected match right away
