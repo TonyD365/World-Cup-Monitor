@@ -1,39 +1,27 @@
-// js/data.js — frontend data orchestration.
-// Strategy (defensive, official-first):
-//   1. Try the Pages Function proxy /api/matches (aggregates FIFA+ESPN+openfootball server-side).
-//   2. If the proxy is absent/fails, fetch sources directly client-side.
-//   3. If everything is empty/unreachable, fall back to mock DEMO data.
+// js/data.js — frontend data orchestration (pure static, no server proxy).
+// Strategy (defensive):
+//   1. Fetch sources directly from the browser: ESPN (live) + openfootball
+//      (schedule). FIFA official is attempted only if enabled (usually blocked
+//      by CORS in the browser, hence off by default).
+//   2. If everything is empty/unreachable, fall back to mock DEMO data.
 import { CONFIG } from './config.js';
 import { mergeMatches, effectiveAuthority } from '../shared/core.js';
 import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary } from '../shared/sources.js';
 import { mockMatches, mockDetail } from '../shared/mock.js';
 
 // Health of each source for the status LEDs.
-export const health = { fifa: 'down', espn: 'down', openfootball: 'down', mock: 'down', proxy: 'down' };
-
-async function tryProxy() {
-  try {
-    const res = await fetch(CONFIG.API_MATCHES, { headers: { Accept: 'application/json' } });
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (!json || !Array.isArray(json.matches)) return null;
-    health.proxy = 'up';
-    if (json.health) Object.assign(health, json.health);
-    return json.matches;
-  } catch (_) {
-    return null;
-  }
-}
+export const health = { fifa: 'down', espn: 'down', openfootball: 'down', mock: 'down' };
 
 async function tryDirect() {
-  const [espn, of, fifa] = await Promise.all([
-    fetchEspn(fetch).catch(() => []),
-    fetchOpenfootball(fetch).catch(() => []),
-    fetchFifa(fetch).catch(() => []), // usually CORS-blocked in browser; best-effort.
-  ]);
+  const tasks = [fetchEspn(fetch).catch(() => []), fetchOpenfootball(fetch).catch(() => [])];
+  // FIFA official is CORS-blocked in the browser for most users; opt-in only.
+  tasks.push(CONFIG.TRY_FIFA_DIRECT ? fetchFifa(fetch).catch(() => []) : Promise.resolve([]));
+  const [espn, of, fifa] = await Promise.all(tasks);
+
   health.espn = espn.length ? 'up' : 'down';
   health.openfootball = of.length ? 'up' : 'down';
   health.fifa = fifa.length ? 'up' : 'down';
+
   const inputs = [
     { source: 'fifa', matches: fifa },
     { source: 'espn', matches: espn },
@@ -45,11 +33,9 @@ async function tryDirect() {
 
 // Returns { matches, authority, demo }.
 export async function loadMatches() {
-  // Reset live-source flags (proxy may overwrite via health payload).
   for (const k of Object.keys(health)) health[k] = 'down';
 
-  let matches = await tryProxy();
-  if (!matches) matches = await tryDirect();
+  let matches = await tryDirect();
 
   let demo = false;
   if (!matches || !matches.length) {
@@ -60,27 +46,13 @@ export async function loadMatches() {
   return { matches, authority: effectiveAuthority(matches), demo };
 }
 
-// Load full detail for a match: { events, lineups, stats, table }.
-// Proxy first, then direct ESPN. Returns null when nothing is available.
+// Load full detail for a match: { events, lineups, stats, table } directly from
+// ESPN's summary endpoint (keyed by the ESPN numeric id). Returns null if none.
 export async function loadDetail(match) {
   if (!match) return null;
   if (match.sources.includes('mock')) return mockDetail(match);
-  // Use the ESPN numeric id (kept separately) — the summary endpoint is keyed
-  // by it. Falls back to the primary id when it's already numeric.
   const eid = match.espnId || (/^\d+$/.test(String(match.id)) ? String(match.id) : null);
   if (!eid) return null;
-  // Proxy summary.
-  try {
-    const res = await fetch(`${CONFIG.API_SUMMARY}?id=${encodeURIComponent(eid)}`);
-    if (res.ok) {
-      const json = await res.json();
-      if (json && (json.events || json.lineups || json.stats || json.table)) return json;
-    }
-  } catch (_) {
-    /* fall through */
-  }
-  // Direct ESPN summary.
   const detail = await fetchEspnSummary(fetch, eid).catch(() => null);
-  if (detail) return detail;
-  return null;
+  return detail || null;
 }

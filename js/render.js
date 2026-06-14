@@ -227,8 +227,6 @@ export function renderHealth(health) {
     const led = el(`led-${src}`);
     if (led) led.className = `led ${health[src] === 'up' ? 'on' : 'off'}`;
   }
-  const px = el('led-proxy');
-  if (px) px.className = `led ${health.proxy === 'up' ? 'on' : 'off'}`;
 }
 
 export function renderAuthority(authority) {

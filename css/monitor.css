@@ -106,6 +106,26 @@ b { color: var(--amber); }
 .led.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
 .led.off { background: #401; box-shadow: 0 0 4px var(--red); }
 
+/* Google Translate picker (top-right, manual) */
+#gt-box {
+  position: absolute; top: 10px; right: 14px; z-index: 60;
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(0, 20, 8, 0.85); border: 1px solid var(--green-dim);
+  padding: 3px 8px;
+}
+#gt-box .gt-icon { font-size: 14px; }
+#google_translate_element { font-family: var(--mono); }
+/* Tame Google's default banner/styling so it doesn't shove the page down. */
+.goog-te-gadget { color: var(--green-dim) !important; font-size: 0 !important; }
+.goog-te-gadget .goog-te-combo {
+  background: #000; color: var(--green); border: 1px solid var(--green-dim);
+  font-family: var(--mono); font-size: 12px; padding: 2px 4px; margin: 0;
+}
+.goog-te-gadget-simple { background: #000 !important; border-color: var(--green-dim) !important; }
+body { top: 0 !important; } /* cancel the translate banner offset */
+.skiptranslate iframe.skiptranslate { display: none !important; }
+.goog-logo-link, .goog-te-gadget span { display: none !important; }
+
 #demo-banner {
   display: none;
   margin: 10px 0;
