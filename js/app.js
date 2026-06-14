@@ -26,7 +26,7 @@ const state = {
   activeTab: 'timeline',
   startedAt: Date.now(),
   nextPollAt: 0,
-  clockSyncedAt: Date.now(),
+  clockAnchor: { id: null, minute: null, at: 0 }, // anchor for second-by-second interpolation
   prevScores: new Map(), // matchId -> {total,h,a} for goal detection (all matches)
   prevSel: null, // {id,h,a} for flip animation on the selected scoreboard
   alertsOn: false,
@@ -68,10 +68,15 @@ function clockText(m) {
   }
   let total;
   if (m.minute != null) {
-    const secs = Math.floor((Date.now() - state.clockSyncedAt) / 1000);
-    total = m.minute * 60 + Math.max(0, Math.min(secs, 120));
-    const cap = m.minute < 45 ? 45 * 60 : m.minute < 90 ? 90 * 60 : (m.minute + 1) * 60;
-    if (total > cap) total = cap;
+    // Re-anchor when the reported minute (or match) changes, then interpolate
+    // seconds 0..59 within that minute. (At 1s polling we can't drive seconds
+    // by poll-delta, so anchor on the minute value instead.)
+    const a = state.clockAnchor;
+    if (a.id !== m.id || a.minute !== m.minute) {
+      state.clockAnchor = { id: m.id, minute: m.minute, at: Date.now() };
+    }
+    const secs = Math.min(59, Math.floor((Date.now() - state.clockAnchor.at) / 1000));
+    total = m.minute * 60 + secs;
   } else {
     const ko = Date.parse(m.kickoff);
     if (isNaN(ko)) return 'LIVE';
@@ -133,16 +138,18 @@ function beep() {
   const c = state.audioCtx;
   if (!c) return;
   const now = c.currentTime;
-  [0, 0.18].forEach((t, i) => {
+  // Three rising notes, louder, so a goal is clearly audible.
+  [620, 820, 1040].forEach((f, i) => {
+    const t = i * 0.16;
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = 'square';
-    o.frequency.value = i ? 880 : 620;
+    o.frequency.value = f;
     o.connect(g); g.connect(c.destination);
     g.gain.setValueAtTime(0.0001, now + t);
-    g.gain.exponentialRampToValueAtTime(0.22, now + t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.16);
-    o.start(now + t); o.stop(now + t + 0.18);
+    g.gain.exponentialRampToValueAtTime(0.5, now + t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.15);
+    o.start(now + t); o.stop(now + t + 0.16);
   });
 }
 
@@ -166,6 +173,7 @@ function setAlerts(on) {
   if (b) { b.textContent = `🔔 ALERTS: ${on ? 'ON' : 'OFF'}`; b.classList.toggle('on', on); }
   if (on) {
     ensureAudio();
+    beep(); // confirmation tone (also unlocks audio within this user gesture)
     if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
   }
 }
@@ -265,7 +273,6 @@ async function poll() {
       state.detail = null;
     }
 
-    state.clockSyncedAt = Date.now();
     renderSelected(m);
     setLastPoll(new Date());
     refreshFlash();
@@ -302,7 +309,7 @@ function init() {
     state.shownKeys.clear();
     state.detail = null;
     state.prevSel = null;
-    state.clockSyncedAt = Date.now();
+    state.clockAnchor = { id: null, minute: null, at: 0 };
     clearEventLog();
     renderMatchStrip(state.matches, state.selectedId);
     renderSelected(selectedMatch());
@@ -315,7 +322,18 @@ function init() {
 
   const at = document.getElementById('alert-toggle');
   if (at) at.addEventListener('click', () => setAlerts(!state.alertsOn));
-  try { if (localStorage.getItem('wc_alerts') === '1') setAlerts(true); } catch (_) { /* ignore */ }
+  // Unlock WebAudio on the first user interaction (iOS requires a gesture).
+  const unlock = () => { ensureAudio(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('touchend', unlock); };
+  window.addEventListener('pointerdown', unlock);
+  window.addEventListener('touchend', unlock);
+  // Restore persisted preference without auto-beeping (no gesture yet).
+  try {
+    if (localStorage.getItem('wc_alerts') === '1') {
+      state.alertsOn = true;
+      const b = document.getElementById('alert-toggle');
+      if (b) { b.textContent = '🔔 ALERTS: ON'; b.classList.add('on'); }
+    }
+  } catch (_) { /* ignore */ }
 
   state.nextPollAt = Date.now() + CONFIG.POLL_INTERVAL;
   poll();
