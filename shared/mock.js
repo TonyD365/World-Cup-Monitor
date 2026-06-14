@@ -89,10 +89,15 @@ export function mockDetail(match) {
       { label: 'Fouls', home: 8, away: 11 },
     ],
     table: [
-      { team: match.home.name, abbr: match.home.abbr, p: 2, w: 1, d: 1, l: 0, gd: '+2', pts: 4 },
-      { team: match.away.name, abbr: match.away.abbr, p: 2, w: 1, d: 0, l: 1, gd: '0', pts: 3 },
-      { team: 'Group Rival A', abbr: 'GRA', p: 2, w: 1, d: 0, l: 1, gd: '-1', pts: 3 },
-      { team: 'Group Rival B', abbr: 'GRB', p: 2, w: 0, d: 1, l: 1, gd: '-1', pts: 1 },
+      {
+        name: 'Group X (DEMO)',
+        rows: [
+          { rank: 1, team: match.home.name, abbr: match.home.abbr, mp: 2, w: 1, d: 1, l: 0, gf: 4, ga: 2, gd: '+2', pts: 4 },
+          { rank: 2, team: match.away.name, abbr: match.away.abbr, mp: 2, w: 1, d: 0, l: 1, gf: 3, ga: 3, gd: '0', pts: 3 },
+          { rank: 3, team: 'Group Rival A', abbr: 'GRA', mp: 2, w: 1, d: 0, l: 1, gf: 2, ga: 3, gd: '-1', pts: 3 },
+          { rank: 4, team: 'Group Rival B', abbr: 'GRB', mp: 2, w: 0, d: 1, l: 1, gf: 1, ga: 2, gd: '-1', pts: 1 },
+        ],
+      },
     ],
   };
 }

@@ -339,21 +339,30 @@ export function renderStats(detail) {
 
 export function renderTable(detail, m) {
   const v = el('view-table');
-  const rows = (detail && detail.table) || [];
-  if (!rows.length) {
+  const groups = (detail && detail.table) || [];
+  if (!groups.length) {
     v.innerHTML = '<div class="empty">// NO TABLE DATA</div>';
     sig.table = '';
     return;
   }
   const names = m ? [m.home.name, m.away.name] : [];
-  const html = `<table class="standings">
-    <thead><tr><th class="l">TEAM</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>PTS</th></tr></thead>
-    <tbody>${rows
-      .map(
-        (r) => `<tr class="${names.includes(r.team) ? 'hl' : ''}">
-        <td class="l" translate="no">${esc(r.abbr || r.team)}</td><td translate="no">${esc(r.p)}</td><td translate="no">${esc(r.w)}</td><td translate="no">${esc(r.d)}</td><td translate="no">${esc(r.l)}</td><td translate="no">${esc(r.gd)}</td><td translate="no">${esc(r.pts)}</td></tr>`
-      )
-      .join('')}</tbody></table>`;
+  const td = (x) => `<td translate="no">${esc(x)}</td>`;
+  const group = (g) => `
+    <div class="sg">
+      <div class="sg-title">${esc((g.name || 'GROUP').toUpperCase())}</div>
+      <table class="standings">
+        <thead><tr><th class="r">#</th><th class="l">TEAM</th><th>MP</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>PTS</th></tr></thead>
+        <tbody>${g.rows
+          .map(
+            (r) => `<tr class="${names.includes(r.team) ? 'hl' : ''}">
+            <td class="r" translate="no">${esc(r.rank)}</td>
+            <td class="l" translate="no">${esc(r.abbr || r.team)}</td>
+            ${td(r.mp)}${td(r.w)}${td(r.d)}${td(r.l)}${td(r.gf)}${td(r.ga)}${td(r.gd)}<td class="pts" translate="no">${esc(r.pts)}</td></tr>`
+          )
+          .join('')}</tbody>
+      </table>
+    </div>`;
+  const html = groups.map(group).join('');
   if (sig.table !== html) {
     v.innerHTML = html;
     sig.table = html;

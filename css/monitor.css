@@ -370,11 +370,19 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 .lineup-row .pos { color: var(--green-dim); font-size: 11px; }
 
 /* Standings table */
-table.standings { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.standings th, table.standings td { padding: 5px 6px; text-align: center; border-bottom: 1px solid #0a2; }
+.sg { margin-bottom: 16px; }
+.sg-title {
+  text-align: center; color: var(--green-dim); letter-spacing: 2px; font-size: 12px;
+  text-transform: uppercase; margin-bottom: 6px;
+}
+table.standings { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.standings th, table.standings td { padding: 5px 4px; text-align: center; border-bottom: 1px solid #0a2; }
 table.standings th { color: var(--green-dim); font-weight: normal; }
 table.standings .l { text-align: left; }
+table.standings .r { color: var(--green-dim); width: 18px; }
+table.standings .pts { color: var(--green); font-weight: bold; }
 table.standings tr.hl { background: rgba(0, 255, 100, 0.12); color: var(--amber); }
+table.standings tr.hl .pts { color: var(--amber); }
 
 footer {
   margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--green-dim);

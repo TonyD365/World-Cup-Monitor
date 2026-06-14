@@ -278,29 +278,39 @@ function statBy(stats, names) {
   return '';
 }
 
-// Group table from the summary's standings block. Robustly digs out the
-// entries array and the team name (ESPN nests/labels these inconsistently).
+// Group table(s) from the summary's standings block. Returns
+// [{ name, rows:[{rank,team,abbr,mp,w,d,l,gf,ga,gd,pts}] }]. Robustly digs out
+// the entries array and the group name (ESPN nests/labels these inconsistently).
 function parseEspnTable(data) {
-  const entryGroups = [];
-  const visit = (node, depth) => {
+  const found = [];
+  const visit = (node, depth, name) => {
     if (!node || typeof node !== 'object' || depth > 6) return;
-    if (Array.isArray(node.entries) && node.entries.some((e) => e && e.team)) entryGroups.push(node.entries);
+    const gname = node.name || node.displayName || node.header || node.groupName || node.abbreviation || name;
+    if (Array.isArray(node.entries) && node.entries.some((e) => e && e.team)) {
+      found.push({ name: gname || '', entries: node.entries });
+    }
     for (const k of Object.keys(node)) {
       const v = node[k];
-      if (v && typeof v === 'object') visit(v, depth + 1);
+      if (v && typeof v === 'object') visit(v, depth + 1, gname);
     }
   };
-  visit(data.standings, 0);
-  const rows = [];
-  const seen = new Set();
-  for (const entries of entryGroups) {
-    for (const e of entries) {
+  visit(data.standings, 0, '');
+
+  const groups = [];
+  const seenGroup = new Set();
+  for (const g of found) {
+    const key = (g.name || '') + '#' + g.entries.length;
+    if (seenGroup.has(key)) continue;
+    seenGroup.add(key);
+    const rows = [];
+    const seen = new Set();
+    g.entries.forEach((e, i) => {
       try {
         const t = e.team || {};
         const name = t.displayName || t.shortDisplayName || t.name || t.location || t.abbreviation || '';
         const abbr = t.abbreviation || t.shortDisplayName || name;
         const id = String(t.id || name);
-        if (!name || seen.has(id)) continue;
+        if (!name || seen.has(id)) return;
         seen.add(id);
         const stats = {};
         for (const s of e.stats || []) {
@@ -310,21 +320,25 @@ function parseEspnTable(data) {
           if (s.abbreviation) stats[s.abbreviation] = dv;
         }
         rows.push({
+          rank: statBy(stats, ['rank']) || i + 1,
           team: name,
           abbr,
-          p: statBy(stats, ['gamesPlayed', 'games', 'GP']),
+          mp: statBy(stats, ['gamesPlayed', 'games', 'GP']),
           w: statBy(stats, ['wins', 'W']),
           d: statBy(stats, ['ties', 'draws', 'D']),
           l: statBy(stats, ['losses', 'L']),
+          gf: statBy(stats, ['pointsFor', 'goalsFor', 'for', 'GF']),
+          ga: statBy(stats, ['pointsAgainst', 'goalsAgainst', 'against', 'GA']),
           gd: statBy(stats, ['pointDifferential', 'goalDifference', 'GD']),
-          pts: statBy(stats, ['points', 'PTS', 'rank']),
+          pts: statBy(stats, ['points', 'PTS']),
         });
       } catch (_) {
         /* skip */
       }
-    }
+    });
+    if (rows.length) groups.push({ name: g.name, rows });
   }
-  return rows;
+  return groups;
 }
 
 // ---- FIFA official (best-effort; no key, server-side only due to CORS) -----
