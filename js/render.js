@@ -202,6 +202,13 @@ export function renderEventLog(m, shownKeys) {
     if (PHASE_TYPES.has(ev.type)) {
       line.className = 'log-line phase flash';
       line.innerHTML = `${icon} <span class="phase-text">${esc((ev.detail || '').toUpperCase())}</span> ${ts ? `<span class="phase-min" translate="no">${ts}</span>` : ''} ${icon}`;
+    } else if (ev.type === 'goal') {
+      // Goals get the prominent, centered treatment too.
+      const team = ev.team ? `<span class="log-team" translate="no">[${esc(ev.team)}]</span>` : '';
+      const who = ev.player ? `<span class="goal-player" translate="no">${esc(ev.player)}</span>` : '';
+      const assist = ev.assist ? ` <span class="goal-assist" translate="no">🅰 ${esc(ev.assist)}</span>` : '';
+      line.className = 'log-line goal-line flash';
+      line.innerHTML = `${icon} <span class="goal-text">GOAL</span> ${ts ? `<span class="phase-min" translate="no">${ts}</span>` : ''} ${team} ${who}${assist} ${icon}`;
     } else {
       line.className = `log-line type-${ev.type} flash`;
       const team = ev.team ? `<span class="log-team" translate="no">[${esc(ev.team)}]</span>` : '';

@@ -352,6 +352,16 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 }
 .phase-text { font-weight: bold; font-size: 15px; text-shadow: 0 0 10px var(--amber); }
 .phase-min { color: var(--green); }
+
+/* Goals: prominent + centered, like the phase markers */
+.log-line.goal-line {
+  text-align: center; margin: 8px 0; padding: 5px 0; letter-spacing: 1px;
+  border-top: 1px dashed var(--green-dim); border-bottom: 1px dashed var(--green-dim);
+  background: rgba(0, 255, 100, 0.07);
+}
+.goal-text { font-weight: bold; font-size: 16px; color: var(--green); text-shadow: 0 0 12px var(--green); }
+.goal-player { color: #eafff2; font-weight: bold; }
+.goal-assist { color: var(--green-soft); }
 .type-goal { color: var(--green); text-shadow: 0 0 8px var(--green-dim); }
 .type-red { color: var(--red); }
 .type-yellow { color: var(--amber); }
