@@ -125,6 +125,13 @@ b { color: var(--amber); }
 body { top: 0 !important; } /* cancel the translate banner offset */
 .skiptranslate iframe.skiptranslate { display: none !important; }
 .goog-logo-link, .goog-te-gadget span { display: none !important; }
+/* Suppress the on-hover/tap "Original text / Rate this translation" popup. */
+#goog-gt-tt, .goog-te-balloon-frame, .goog-tooltip, .goog-tooltip:hover,
+.VIpgJd-yAWNEb-VIpgJd-fmcmS, .VIpgJd-yAWNEb-L7lbkb, .VIpgJd-yAWNEb-hvhgNd,
+.VIpgJd-yAWNEb-hvhgNd-aXYTce, .VIpgJd-yAWNEb-hvhgNd-IuizWc {
+  display: none !important; visibility: hidden !important;
+}
+.goog-text-highlight { background: none !important; box-shadow: none !important; }
 
 #demo-banner {
   display: none;
