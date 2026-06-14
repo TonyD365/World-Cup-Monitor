@@ -2,8 +2,9 @@
 :root {
   --bg: #000;
   --green: #00ff66;
-  --green-dim: #0a7a3a;
-  --amber: #ffb000;
+  --green-dim: #2fb56a; /* brighter secondary so text is legible */
+  --green-soft: #bdf3d6; /* light body text */
+  --amber: #ffc23d;
   --red: #ff3344;
   --panel: #04140a;
   --border: #0c3;
@@ -208,12 +209,12 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 #event-log {
   height: 360px; overflow-y: auto; font-size: 13px; line-height: 1.5;
 }
-.log-line { opacity: 0.95; padding: 1px 0; }
-.log-ts { color: var(--green-dim); }
+.log-line { opacity: 1; padding: 2px 0; color: var(--green-soft); line-height: 1.45; }
+.log-ts { color: #62e29a; }
 .log-type { color: var(--amber); font-size: 11px; }
-.log-team { color: var(--green); font-weight: bold; text-shadow: 0 0 6px var(--green-dim); }
-.log-player { color: #cfe; }
-.log-detail { color: var(--green-dim); }
+.log-team { color: var(--green); font-weight: bold; text-shadow: 0 0 6px rgba(0, 255, 100, 0.5); }
+.log-player { color: #eafff2; font-weight: bold; }
+.log-detail { color: var(--green-soft); }
 
 /* Prominent, centered phase markers: kick-off / half-time / stoppage / full-time */
 .log-line.phase {
