@@ -1,6 +1,6 @@
 // js/app.js — controller: polling loop, selector wiring, state.
 import { CONFIG } from './config.js';
-import { loadMatches, loadDetail, health } from './data.js';
+import { loadMatches, loadDetail, loadStandings, health } from './data.js';
 import {
   renderMatchStrip,
   renderScoreboard,
@@ -27,6 +27,7 @@ const state = {
   startedAt: Date.now(),
   nextPollAt: 0,
   clockAnchor: { id: null, minute: null, at: 0 }, // anchor for second-by-second interpolation
+  stopAnchor: { id: null, base: null, at: 0 }, // anchor for stoppage-time seconds
   prevScores: new Map(), // matchId -> {total,h,a} for goal detection (all matches)
   prevSel: null, // {id,h,a} for flip animation on the selected scoreboard
   alertsOn: false,
@@ -62,9 +63,16 @@ function clockText(m) {
   if (inHydrationBreak(m) || /hydration|cooling|drinks? break/.test(p)) return 'HYDRATION BREAK';
   const stop = /(\d+)\s*'?\s*\+\s*(\d+)/.exec(period);
   if (stop) {
-    const base = parseInt(stop[1], 10);
-    const anchor = base >= 46 ? 90 : 45;
-    return `${anchor}:00 (+${stop[2]})`;
+    // Stoppage time with ticking seconds, e.g. "45:00 (+2:34)". Seed the elapsed
+    // from the announced added minutes, then tick continuously.
+    const base = parseInt(stop[1], 10) >= 46 ? 90 : 45;
+    const n = parseInt(stop[2], 10) || 0;
+    const sa = state.stopAnchor;
+    if (sa.id !== m.id || sa.base !== base) {
+      state.stopAnchor = { id: m.id, base, at: Date.now() - Math.max(0, n - 1) * 60000 };
+    }
+    const elapsed = Math.max(0, Math.floor((Date.now() - state.stopAnchor.at) / 1000));
+    return `${base}:00 (+${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')})`;
   }
   let total;
   let minute = m.minute;
@@ -104,6 +112,16 @@ function renderClock() {
 
 function selectedMatch() {
   return state.matches.find((m) => m.id === state.selectedId) || null;
+}
+
+// Pick the standings group containing the selected match's teams (else all).
+function groupsForMatch(groups, m) {
+  const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+  const hn = norm(m.home.name);
+  const an = norm(m.away.name);
+  const has = (g) => g.rows.some((r) => { const t = norm(r.team); return t === hn || t === an; });
+  const hit = groups.find(has);
+  return hit ? [hit] : groups;
 }
 
 // ---- goal alerts -----------------------------------------------------------
@@ -260,12 +278,11 @@ async function poll() {
 
     const m = selectedMatch();
     if (m) {
-      const detail = await loadDetail(m);
-      state.detail = detail;
-      if (detail && detail.events && detail.events.length) m.events = detail.events;
+      const detail = (await loadDetail(m)) || {};
+      if (detail.events && detail.events.length) m.events = detail.events;
       // The summary header is the most current per-match state — override the
       // (possibly stale) scoreboard/merge values for the selected match.
-      const L = detail && detail.live;
+      const L = detail.live;
       if (L) {
         if (L.status) m.status = L.status;
         if (L.minute != null) m.minute = L.minute; // don't clobber with null
@@ -273,6 +290,13 @@ async function poll() {
         if (L.homeScore != null) m.home.score = L.homeScore;
         if (L.awayScore != null) m.away.score = L.awayScore;
       }
+      // Group table: ESPN summary rarely includes it, so fall back to the table
+      // computed from openfootball results, filtered to this match's group.
+      if (!detail.table || !detail.table.length) {
+        const groups = await loadStandings().catch(() => []);
+        if (groups.length) detail.table = groupsForMatch(groups, m);
+      }
+      state.detail = detail;
     } else {
       state.detail = null;
     }
@@ -314,6 +338,7 @@ function init() {
     state.detail = null;
     state.prevSel = null;
     state.clockAnchor = { id: null, minute: null, at: 0 };
+    state.stopAnchor = { id: null, base: null, at: 0 };
     clearEventLog();
     renderMatchStrip(state.matches, state.selectedId);
     // Immediate scoreboard feedback; the event log + tabs are filled by poll()

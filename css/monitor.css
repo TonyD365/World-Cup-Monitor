@@ -238,7 +238,7 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 .sb-team { text-align: center; }
 .sb-team.away { }
 .sb-flag { font-size: 34px; line-height: 1; }
-.sb-name { margin-top: 6px; font-size: 16px; }
+.sb-name { margin-top: 6px; font-size: 24px; font-weight: bold; }
 .sb-score {
   font-size: 46px; color: var(--green); text-shadow: 0 0 12px var(--green-dim);
   white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 8px;

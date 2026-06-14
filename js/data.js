@@ -6,8 +6,19 @@
 //   2. If everything is empty/unreachable, fall back to mock DEMO data.
 import { CONFIG } from './config.js';
 import { mergeMatches, effectiveAuthority } from '../shared/core.js';
-import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary } from '../shared/sources.js';
+import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchOpenfootballStandings } from '../shared/sources.js';
 import { mockMatches, mockDetail } from '../shared/mock.js';
+
+// Group standings computed from openfootball results, cached (refreshes slowly).
+let _standings = null;
+let _standingsAt = 0;
+export async function loadStandings() {
+  const now = Date.now();
+  if (_standings && now - _standingsAt < 5 * 60 * 1000) return _standings;
+  const g = await fetchOpenfootballStandings(fetch).catch(() => null);
+  if (g && g.length) { _standings = g; _standingsAt = now; }
+  return _standings || [];
+}
 
 // Health of each source for the status LEDs.
 export const health = { fifa: 'down', espn: 'down', openfootball: 'down', mock: 'down' };

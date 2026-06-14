@@ -513,6 +513,57 @@ export async function fetchOpenfootball(fetchImpl) {
   return out;
 }
 
+// Compute group standings from openfootball results (each match carries a
+// `group` and `score.ft`). Returns [{ name, rows:[{rank,team,abbr,mp,w,d,l,gf,ga,gd,pts}] }].
+export async function fetchOpenfootballStandings(fetchImpl) {
+  let data = null;
+  for (const url of OPENFOOTBALL_URLS) {
+    data = await getJSON(fetchImpl, url);
+    if (data && (data.rounds || data.matches)) break;
+  }
+  if (!data) return [];
+  const rows = [];
+  if (Array.isArray(data.matches)) rows.push(...data.matches);
+  if (Array.isArray(data.rounds)) for (const r of data.rounds) rows.push(...(r.matches || []));
+
+  const groups = new Map(); // groupName -> Map(team -> stats)
+  for (const m of rows) {
+    const g = m.group;
+    const sc = m.score && m.score.ft;
+    if (!g || !sc || sc.length < 2 || sc[0] == null || sc[1] == null) continue;
+    if (isPlaceholderTeam(m.team1) || isPlaceholderTeam(m.team2)) continue;
+    if (!groups.has(g)) groups.set(g, new Map());
+    const tbl = groups.get(g);
+    const ensure = (t) => {
+      if (!tbl.has(t)) tbl.set(t, { team: t, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 });
+      return tbl.get(t);
+    };
+    const a = ensure(m.team1);
+    const b = ensure(m.team2);
+    const g1 = sc[0];
+    const g2 = sc[1];
+    a.mp += 1; b.mp += 1;
+    a.gf += g1; a.ga += g2; b.gf += g2; b.ga += g1;
+    if (g1 > g2) { a.w += 1; a.pts += 3; b.l += 1; }
+    else if (g1 < g2) { b.w += 1; b.pts += 3; a.l += 1; }
+    else { a.d += 1; b.d += 1; a.pts += 1; b.pts += 1; }
+  }
+
+  const out = [];
+  for (const [name, tbl] of groups) {
+    const list = [...tbl.values()].map((r) => ({ ...r, gdNum: r.gf - r.ga }));
+    list.sort((x, y) => y.pts - x.pts || y.gdNum - x.gdNum || y.gf - x.gf || x.team.localeCompare(y.team));
+    const rowsOut = list.map((r, i) => ({
+      rank: i + 1, team: r.team, abbr: '',
+      mp: r.mp, w: r.w, d: r.d, l: r.l, gf: r.gf, ga: r.ga,
+      gd: (r.gdNum > 0 ? '+' : '') + r.gdNum, pts: r.pts,
+    }));
+    out.push({ name, rows: rowsOut });
+  }
+  out.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  return out;
+}
+
 // A real fixture has named countries; bracket slots ("2A", "W73", "3A/B/C",
 // "L101") are placeholders we don't want cluttering the monitor.
 function isPlaceholderTeam(name) {
