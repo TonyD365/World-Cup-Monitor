@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WORLD CUP // LIVE MONITOR</title>
+  <meta name="description" content="Hacker-terminal style live monitor for the FIFA World Cup. Multi-source, official-first, 5s refresh." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/monitor.css" />
+</head>
+<body>
+  <div id="screen">
+    <pre class="banner">
+ __        _____  ____  _     ____     ____ _   _ ____    __  __  ___  _   _ ___ _____ ___  ____
+ \ \      / / _ \|  _ \| |   |  _ \   / ___| | | |  _ \  |  \/  |/ _ \| \ | |_ _|_   _/ _ \|  _ \
+  \ \ /\ / / | | | |_) | |   | | | | | |   | | | | |_) | | |\/| | | | |  \| || |  | || | | | |_) |
+   \ V  V /| |_| |  _ <| |___| |_| | | |___| |_| |  __/  | |  | | |_| | |\  || |  | || |_| |  _ <
+    \_/\_/  \___/|_| \_\_____|____/   \____|\___/|_|     |_|  |_|\___/|_| \_|___| |_| \___/|_| \_\
+</pre>
+
+    <div class="sysline">
+      <span><span class="k">SESSION_UPTIME:</span> <span class="v" id="uptime">00:00:00</span></span>
+      <span><span class="k">LAST_POLL:</span> <span class="v" id="last-poll">--:--:--</span></span>
+      <span><span class="k">NEXT_POLL:</span> <span class="v" id="next-poll">5.0s</span></span>
+      <span class="leds">
+        <span class="led-wrap"><span class="led off" id="led-fifa"></span>FIFA</span>
+        <span class="led-wrap"><span class="led off" id="led-espn"></span>ESPN</span>
+        <span class="led-wrap"><span class="led off" id="led-openfootball"></span>OPENFB</span>
+        <span class="led-wrap"><span class="led off" id="led-proxy"></span>PROXY</span>
+        <span class="led-wrap"><span class="led off" id="led-mock"></span>MOCK</span>
+      </span>
+      <span class="cursor"></span>
+    </div>
+
+    <div id="demo-banner">⚠ DEMO MODE — live sources unreachable, showing simulated data</div>
+
+    <div class="toolbar">
+      <label for="match-select">&gt; SELECT LIVE MATCH:</label>
+      <select id="match-select"><option>loading…</option></select>
+      <span class="poll">
+        <span>REFRESH</span>
+        <span class="poll-track"><span id="poll-progress"></span></span>
+      </span>
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>// SCOREBOARD</h2>
+        <div id="scoreboard"><div class="empty">// INITIALIZING…</div></div>
+      </section>
+      <section class="panel">
+        <h2>// EVENT LOG</h2>
+        <div id="event-log"></div>
+      </section>
+    </div>
+
+    <footer>
+      <span class="badge">OFFICIAL PRECEDENCE: <b id="authority">—</b></span>
+      <span>SOURCES: FIFA (api.fifa.com) · ESPN (site.api.espn.com) · openfootball · mock</span>
+      <span>// no API key · 5s poll · official-first merge</span>
+    </footer>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

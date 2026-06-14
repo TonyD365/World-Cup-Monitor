@@ -1,0 +1,11 @@
+{
+  "name": "world-cup-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hacker-terminal style live monitor for the FIFA World Cup (multi-source, official-first, 5s refresh).",
+  "scripts": {
+    "dev": "python3 -m http.server 8000",
+    "dev:functions": "wrangler pages dev ."
+  }
+}
