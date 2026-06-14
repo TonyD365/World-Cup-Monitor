@@ -69,12 +69,11 @@ async function poll() {
     if (m) {
       const detail = await loadDetail(m);
       state.detail = detail;
+      // The summary commentary is the full timeline (goals, cards, subs, fouls,
+      // corners, throw-ins, …) — use it as the base when available; otherwise
+      // keep the scoreboard's (goals-only) events.
       if (detail && detail.events && detail.events.length) {
-        const seen = new Set(m.events.map((e) => `${e.min}|${e.type}|${e.player}`));
-        for (const e of detail.events) {
-          const k = `${e.min}|${e.type}|${e.player}`;
-          if (!seen.has(k)) m.events.push(e);
-        }
+        m.events = detail.events;
       }
     } else {
       state.detail = null;

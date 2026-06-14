@@ -136,6 +136,12 @@ function mergeGroup(group) {
   );
   out.id = idPick || matchIdentity(group[0]);
 
+  // Keep the ESPN numeric id separately: ESPN's summary endpoint (lineups,
+  // stats, full commentary, table) is keyed by it. When FIFA wins the primary
+  // `id` (a GUID), we'd otherwise lose the ability to fetch match detail.
+  const espn = group.find((m) => m._source === 'espn');
+  out.espnId = espn && /^\d+$/.test(String(espn.id || '')) ? String(espn.id) : null;
+
   for (const f of ['comp', 'status', 'minute', 'period', 'venue', 'kickoff']) {
     const v = pickField(
       f,

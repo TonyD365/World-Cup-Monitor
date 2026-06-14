@@ -65,9 +65,13 @@ export async function loadMatches() {
 export async function loadDetail(match) {
   if (!match) return null;
   if (match.sources.includes('mock')) return mockDetail(match);
+  // Use the ESPN numeric id (kept separately) — the summary endpoint is keyed
+  // by it. Falls back to the primary id when it's already numeric.
+  const eid = match.espnId || (/^\d+$/.test(String(match.id)) ? String(match.id) : null);
+  if (!eid) return null;
   // Proxy summary.
   try {
-    const res = await fetch(`${CONFIG.API_SUMMARY}?id=${encodeURIComponent(match.id)}`);
+    const res = await fetch(`${CONFIG.API_SUMMARY}?id=${encodeURIComponent(eid)}`);
     if (res.ok) {
       const json = await res.json();
       if (json && (json.events || json.lineups || json.stats || json.table)) return json;
@@ -75,10 +79,8 @@ export async function loadDetail(match) {
   } catch (_) {
     /* fall through */
   }
-  // Direct ESPN summary (only meaningful for ESPN numeric ids).
-  if (/^\d+$/.test(match.id)) {
-    const detail = await fetchEspnSummary(fetch, match.id).catch(() => null);
-    if (detail) return detail;
-  }
+  // Direct ESPN summary.
+  const detail = await fetchEspnSummary(fetch, eid).catch(() => null);
+  if (detail) return detail;
   return null;
 }
