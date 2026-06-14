@@ -46,8 +46,10 @@ export function normalizeAbbr(s) {
 // Build a stable identity for a match so the same fixture from different
 // sources lines up: sorted team abbreviations + kickoff calendar day.
 export function matchIdentity(m) {
-  const a = normalizeAbbr(m.home && m.home.abbr) || normalizeAbbr(m.home && m.home.name);
-  const b = normalizeAbbr(m.away && m.away.abbr) || normalizeAbbr(m.away && m.away.name);
+  // Prefer the full team NAME (more consistent across sources) over the
+  // abbreviation, which differs per source (e.g. ESPN "CUW" vs FIFA "Curaçao").
+  const a = normalizeAbbr(m.home && m.home.name) || normalizeAbbr(m.home && m.home.abbr);
+  const b = normalizeAbbr(m.away && m.away.name) || normalizeAbbr(m.away && m.away.abbr);
   const teams = [a, b].sort().join('-');
   let day = '';
   if (m.kickoff) {
@@ -195,6 +197,39 @@ export function mergeMatches(inputs) {
     return String(a.kickoff || '').localeCompare(String(b.kickoff || ''));
   });
   return merged;
+}
+
+// ---- selection helpers (shared by the frontend) ---------------------------
+export function isLive(m) {
+  return m.status === 'live';
+}
+export function hasScore(m) {
+  return (m.home && m.home.score != null) || (m.away && m.away.score != null);
+}
+function kickoffTime(m) {
+  const t = m.kickoff ? Date.parse(m.kickoff) : NaN;
+  return isNaN(t) ? 0 : t;
+}
+
+// Build the dropdown list AND choose a sensible default:
+//   - if any match is live -> show only live matches.
+//   - otherwise -> show recent results (most recent first) followed by the
+//     next upcoming fixtures, so the monitor always shows real scores.
+// Returns { list, defaultId }.
+export function buildSelector(matches) {
+  const live = matches.filter(isLive).sort((a, b) => kickoffTime(b) - kickoffTime(a));
+  if (live.length) {
+    return { list: live, defaultId: live[0].id };
+  }
+  const results = matches
+    .filter((m) => hasScore(m))
+    .sort((a, b) => kickoffTime(b) - kickoffTime(a)); // newest result first
+  const upcoming = matches
+    .filter((m) => !hasScore(m) && m.status !== 'ft')
+    .sort((a, b) => kickoffTime(a) - kickoffTime(b)); // soonest first
+  const list = [...results.slice(0, 20), ...upcoming.slice(0, 20)];
+  const final = list.length ? list : matches;
+  return { list: final, defaultId: final[0] ? final[0].id : null };
 }
 
 // Which source is currently the authoritative one across a merged list.

@@ -42,6 +42,45 @@ function liveMinute(seed) {
   return Math.max(1, base);
 }
 
+const MOCK_NAMES = ['Keeper', 'Back', 'Stopper', 'Sweeper', 'Wing', 'Mid', 'Maestro', 'Engine', 'Winger', 'Striker', 'Poacher'];
+const POS = ['GK', 'RB', 'CB', 'CB', 'LB', 'CM', 'CM', 'RM', 'LM', 'ST', 'ST'];
+
+function mockLineup(side, team) {
+  return {
+    side,
+    team,
+    formation: '4-4-2',
+    starters: MOCK_NAMES.map((n, i) => ({ num: i + 1, name: `${team.abbr} ${n}`, pos: POS[i], starter: true })),
+    subs: [
+      { num: 12, name: `${team.abbr} Sub-GK`, pos: 'GK', starter: false },
+      { num: 14, name: `${team.abbr} Sub-MF`, pos: 'CM', starter: false },
+      { num: 19, name: `${team.abbr} Sub-FW`, pos: 'ST', starter: false },
+    ],
+  };
+}
+
+// Mock detail for the new Timeline/Lineups/Stats/Table tabs in DEMO mode.
+export function mockDetail(match) {
+  const s = match.stats || {};
+  return {
+    events: match.events || [],
+    lineups: [mockLineup('home', match.home), mockLineup('away', match.away)],
+    stats: [
+      { label: 'Possession %', home: `${s.possessionHome ?? 50}%`, away: `${s.possessionAway ?? 50}%` },
+      { label: 'Shots', home: s.shotsHome ?? 0, away: s.shotsAway ?? 0 },
+      { label: 'Shots on Target', home: Math.ceil((s.shotsHome ?? 0) / 2), away: Math.ceil((s.shotsAway ?? 0) / 2) },
+      { label: 'Corners', home: 4, away: 3 },
+      { label: 'Fouls', home: 8, away: 11 },
+    ],
+    table: [
+      { team: match.home.name, abbr: match.home.abbr, p: 2, w: 1, d: 1, l: 0, gd: '+2', pts: 4 },
+      { team: match.away.name, abbr: match.away.abbr, p: 2, w: 1, d: 0, l: 1, gd: '0', pts: 3 },
+      { team: 'Group Rival A', abbr: 'GRA', p: 2, w: 1, d: 0, l: 1, gd: '-1', pts: 3 },
+      { team: 'Group Rival B', abbr: 'GRB', p: 2, w: 0, d: 1, l: 1, gd: '-1', pts: 1 },
+    ],
+  };
+}
+
 export function mockMatches() {
   return DEMO_MATCHES.map((d) => {
     const minute = liveMinute(d.seed);

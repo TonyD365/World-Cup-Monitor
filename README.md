@@ -16,6 +16,10 @@ sources and merged **official-first** — when sources disagree, the most author
   - **mock** — built-in demo data so the screen is never blank.
 - 🏅 Official-first, field-by-field merge with on-screen `SOURCE CONFLICT` notices and per-field
   source tags.
+- 📊 Match tabs: **Timeline** (goals/cards/subs), **Lineups** (starting XI + subs),
+  **Stats** (possession/shots/…), **Table** (group standings).
+- 🎯 Smart selection: shows live matches when any are live, otherwise the latest results +
+  upcoming fixtures (so the board always has real scores), and skips bracket placeholders.
 - 🚦 Source health LEDs (FIFA / ESPN / OPENFB / PROXY / MOCK) and an `OFFICIAL PRECEDENCE` badge.
 - ☁️ Deploys to **Cloudflare Pages** with zero build step. A Pages Function proxy
   (`/functions/api/*`) aggregates the sources server-side to avoid browser CORS; if the proxy is
@@ -77,6 +81,10 @@ No environment variables or API keys are required.
   - **openfootball/worldcup.json**——公有领域的赛程/对阵兜底（非实时）。
   - **mock**——内置演示数据，保证界面永不空白。
 - 🏅 官方优先、逐字段合并，界面显示 `SOURCE CONFLICT` 冲突提示和每个字段的来源标签。
+- 📊 比赛标签页:**Timeline**(进球/红黄牌/换人)、**Lineups**(首发 + 替补)、
+  **Stats**(控球/射门等)、**Table**(小组积分榜)。
+- 🎯 智能选择:有进行中的比赛时只显示直播;否则显示最近赛果 + 即将开赛(保证始终有真实比分),
+  并自动过滤掉淘汰赛占位(如 "2A"、"W73")。
 - 🚦 数据源健康指示灯（FIFA / ESPN / OPENFB / PROXY / MOCK）与 `OFFICIAL PRECEDENCE` 徽标。
 - ☁️ 零构建步骤部署到 **Cloudflare Pages**。Pages Function 代理（`/functions/api/*`）在服务端
   聚合数据以绕开浏览器 CORS；若没有该代理（例如本地直接打开），前端自动降级为客户端直连拉取。

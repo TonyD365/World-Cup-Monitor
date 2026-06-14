@@ -51,8 +51,16 @@
         <div id="scoreboard"><div class="empty">// INITIALIZING…</div></div>
       </section>
       <section class="panel">
-        <h2>// EVENT LOG</h2>
-        <div id="event-log"></div>
+        <div class="tabs" id="tabs">
+          <button class="tab active" data-tab="timeline">TIMELINE</button>
+          <button class="tab" data-tab="lineups">LINEUPS</button>
+          <button class="tab" data-tab="stats">STATS</button>
+          <button class="tab" data-tab="table">TABLE</button>
+        </div>
+        <div class="tab-view" id="view-timeline"><div id="event-log"></div></div>
+        <div class="tab-view" id="view-lineups" hidden></div>
+        <div class="tab-view" id="view-stats" hidden></div>
+        <div class="tab-view" id="view-table" hidden></div>
       </section>
     </div>
 

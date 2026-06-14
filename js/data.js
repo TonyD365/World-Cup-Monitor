@@ -6,7 +6,7 @@
 import { CONFIG } from './config.js';
 import { mergeMatches, effectiveAuthority } from '../shared/core.js';
 import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary } from '../shared/sources.js';
-import { mockMatches } from '../shared/mock.js';
+import { mockMatches, mockDetail } from '../shared/mock.js';
 
 // Health of each source for the status LEDs.
 export const health = { fifa: 'down', espn: 'down', openfootball: 'down', mock: 'down', proxy: 'down' };
@@ -60,23 +60,25 @@ export async function loadMatches() {
   return { matches, authority: effectiveAuthority(matches), demo };
 }
 
-// Enrich a single match's events via summary endpoints (proxy first, then direct ESPN).
-export async function loadSummaryEvents(match) {
-  if (!match || match.sources.includes('mock')) return null;
+// Load full detail for a match: { events, lineups, stats, table }.
+// Proxy first, then direct ESPN. Returns null when nothing is available.
+export async function loadDetail(match) {
+  if (!match) return null;
+  if (match.sources.includes('mock')) return mockDetail(match);
   // Proxy summary.
   try {
     const res = await fetch(`${CONFIG.API_SUMMARY}?id=${encodeURIComponent(match.id)}`);
     if (res.ok) {
       const json = await res.json();
-      if (json && Array.isArray(json.events)) return json.events;
+      if (json && (json.events || json.lineups || json.stats || json.table)) return json;
     }
   } catch (_) {
     /* fall through */
   }
   // Direct ESPN summary (only meaningful for ESPN numeric ids).
-  if (match.sources.includes('espn') && /^\d+$/.test(match.id)) {
-    const events = await fetchEspnSummary(fetch, match.id).catch(() => null);
-    if (events && events.length) return events;
+  if (/^\d+$/.test(match.id)) {
+    const detail = await fetchEspnSummary(fetch, match.id).catch(() => null);
+    if (detail) return detail;
   }
   return null;
 }

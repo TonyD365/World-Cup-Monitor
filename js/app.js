@@ -1,6 +1,6 @@
 // js/app.js — controller: polling loop, selector wiring, state.
 import { CONFIG } from './config.js';
-import { loadMatches, loadSummaryEvents, health } from './data.js';
+import { loadMatches, loadDetail, health } from './data.js';
 import {
   renderSelector,
   renderScoreboard,
@@ -11,18 +11,42 @@ import {
   setLastPoll,
   setDemoBanner,
   refreshFlash,
+  renderLineups,
+  renderStats,
+  renderTable,
 } from './render.js';
 
 const state = {
   matches: [],
   selectedId: null,
   shownKeys: new Set(), // event log de-dup keys
+  detail: null, // last loaded { events, lineups, stats, table }
+  activeTab: 'timeline',
   startedAt: Date.now(),
   nextPollAt: 0,
 };
 
 function selectedMatch() {
   return state.matches.find((m) => m.id === state.selectedId) || null;
+}
+
+function showTab(tab) {
+  state.activeTab = tab;
+  for (const btn of document.querySelectorAll('.tab')) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  }
+  for (const view of document.querySelectorAll('.tab-view')) {
+    view.hidden = view.id !== `view-${tab}`;
+  }
+  renderActiveTab();
+}
+
+function renderActiveTab() {
+  const m = selectedMatch();
+  if (state.activeTab === 'lineups') renderLineups(state.detail);
+  else if (state.activeTab === 'stats') renderStats(state.detail);
+  else if (state.activeTab === 'table') renderTable(state.detail, m);
+  // timeline is rendered incrementally via renderEventLog
 }
 
 async function poll() {
@@ -41,20 +65,24 @@ async function poll() {
     }
 
     const m = selectedMatch();
-    // Best-effort richer events for the selected match.
+    // Best-effort richer detail (events / lineups / stats / table) for selection.
     if (m) {
-      const extra = await loadSummaryEvents(m);
-      if (extra && extra.length) {
+      const detail = await loadDetail(m);
+      state.detail = detail;
+      if (detail && detail.events && detail.events.length) {
         const seen = new Set(m.events.map((e) => `${e.min}|${e.type}|${e.player}`));
-        for (const e of extra) {
+        for (const e of detail.events) {
           const k = `${e.min}|${e.type}|${e.player}`;
           if (!seen.has(k)) m.events.push(e);
         }
       }
+    } else {
+      state.detail = null;
     }
 
     renderScoreboard(m);
     renderEventLog(m, state.shownKeys);
+    renderActiveTab();
     setLastPoll(new Date());
     refreshFlash();
   } catch (err) {
@@ -85,10 +113,17 @@ function init() {
   document.getElementById('match-select').addEventListener('change', (e) => {
     state.selectedId = e.target.value;
     state.shownKeys.clear();
+    state.detail = null;
     clearEventLog();
     renderScoreboard(selectedMatch());
     renderEventLog(selectedMatch(), state.shownKeys);
+    renderActiveTab();
+    poll(); // fetch detail for the newly selected match right away
   });
+
+  for (const btn of document.querySelectorAll('.tab')) {
+    btn.addEventListener('click', () => showTab(btn.dataset.tab));
+  }
 
   state.nextPollAt = Date.now() + CONFIG.POLL_INTERVAL;
   poll();

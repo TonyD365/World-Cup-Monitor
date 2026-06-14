@@ -1,4 +1,6 @@
 // js/render.js — DOM rendering for the monitor. All UI text is English.
+import { buildSelector } from '../shared/core.js';
+
 const EVENT_ICON = { goal: '⚽', yellow: '🟨', red: '🟥', sub: '⇄', info: '›' };
 
 function el(id) {
@@ -11,22 +13,30 @@ function statusLabel(m) {
   return 'SCHEDULED';
 }
 
-// Populate the live-match dropdown, preserving the current selection if possible.
+// Populate the dropdown. Shows live matches when any are live, otherwise recent
+// results + upcoming fixtures. Returns the id that should be selected.
 export function renderSelector(matches, selectedId) {
   const sel = el('match-select');
-  const live = matches.filter((m) => m.status === 'live');
-  const list = live.length ? live : matches; // if none live, show all so UI isn't empty
+  const { list, defaultId } = buildSelector(matches);
   const prev = selectedId || sel.value;
   sel.innerHTML = '';
   for (const m of list) {
     const o = document.createElement('option');
     o.value = m.id;
-    const clk = m.status === 'live' && m.minute ? ` · ${m.minute}'` : '';
-    o.textContent = `${m.home.abbr || m.home.name} v ${m.away.abbr || m.away.name}${clk}`;
+    const h = m.home.abbr || m.home.name;
+    const a = m.away.abbr || m.away.name;
+    let tag;
+    if (m.status === 'live') tag = m.minute ? `${m.minute}'` : 'LIVE';
+    else if (m.status === 'ft') tag = 'FT';
+    else tag = 'SCHED';
+    const score =
+      m.home.score != null || m.away.score != null ? ` ${m.home.score ?? 0}-${m.away.score ?? 0}` : '';
+    o.textContent = `${h} v ${a}${score} · ${tag}`;
     sel.appendChild(o);
   }
-  if (list.some((m) => m.id === prev)) sel.value = prev;
-  return sel.value || (list[0] && list[0].id) || null;
+  const keep = list.some((m) => m.id === prev) ? prev : defaultId;
+  if (keep) sel.value = keep;
+  return sel.value || defaultId || null;
 }
 
 function bar(label, pctHome, pctAway) {
@@ -108,6 +118,69 @@ export function renderEventLog(m, shownKeys) {
 
 export function clearEventLog() {
   el('event-log').innerHTML = '';
+}
+
+// ---- tab views: Lineups / Stats / Table -----------------------------------
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+export function renderLineups(detail) {
+  const v = el('view-lineups');
+  const lineups = (detail && detail.lineups) || [];
+  if (!lineups.length) {
+    v.innerHTML = '<div class="empty">// NO LINEUP DATA</div>';
+    return;
+  }
+  const col = (lu) => `
+    <div class="lineup-col">
+      <div class="lineup-head">${esc(lu.team)} ${lu.formation ? '· ' + esc(lu.formation) : ''}</div>
+      <div class="lineup-sub-label">STARTING XI</div>
+      ${lu.starters.map((p) => `<div class="lineup-row"><span class="num">${esc(p.num)}</span> ${esc(p.name)} <span class="pos">${esc(p.pos)}</span></div>`).join('')}
+      ${lu.subs.length ? `<div class="lineup-sub-label">SUBS</div>${lu.subs.map((p) => `<div class="lineup-row dim"><span class="num">${esc(p.num)}</span> ${esc(p.name)} <span class="pos">${esc(p.pos)}</span></div>`).join('')}` : ''}
+    </div>`;
+  v.innerHTML = `<div class="lineups">${lineups.map(col).join('')}</div>`;
+}
+
+export function renderStats(detail) {
+  const v = el('view-stats');
+  const stats = (detail && detail.stats) || [];
+  if (!stats.length) {
+    v.innerHTML = '<div class="empty">// NO STATS DATA</div>';
+    return;
+  }
+  const num = (x) => {
+    const n = parseFloat(String(x).replace('%', ''));
+    return isNaN(n) ? 0 : n;
+  };
+  v.innerHTML = stats
+    .map((s) => {
+      const h = num(s.home);
+      const a = num(s.away);
+      const tot = h + a || 1;
+      return `<div class="stat-row">
+        <span class="stat-h">${esc(s.home)}</span>
+        <div class="stat-bar"><div class="stat-fill-h" style="width:${(100 * h) / tot}%"></div><div class="stat-fill-a" style="width:${(100 * a) / tot}%"></div></div>
+        <span class="stat-a">${esc(s.away)}</span>
+        <span class="stat-label">${esc(s.label)}</span></div>`;
+    })
+    .join('');
+}
+
+export function renderTable(detail, m) {
+  const v = el('view-table');
+  const rows = (detail && detail.table) || [];
+  if (!rows.length) {
+    v.innerHTML = '<div class="empty">// NO TABLE DATA</div>';
+    return;
+  }
+  const names = m ? [m.home.name, m.away.name] : [];
+  v.innerHTML = `<table class="standings">
+    <thead><tr><th class="l">TEAM</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>PTS</th></tr></thead>
+    <tbody>${rows
+      .map(
+        (r) => `<tr class="${names.includes(r.team) ? 'hl' : ''}">
+        <td class="l">${esc(r.abbr || r.team)}</td><td>${esc(r.p)}</td><td>${esc(r.w)}</td><td>${esc(r.d)}</td><td>${esc(r.l)}</td><td>${esc(r.gd)}</td><td>${esc(r.pts)}</td></tr>`
+      )
+      .join('')}</tbody></table>`;
 }
 
 export function renderHealth(health) {

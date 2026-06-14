@@ -16,9 +16,10 @@ export async function onRequestOptions() {
 
 export async function onRequestGet({ request }) {
   const id = new URL(request.url).searchParams.get('id');
+  const empty = { events: [], lineups: [], stats: [], table: [] };
   if (!id || !/^\d+$/.test(id)) {
-    return new Response(JSON.stringify({ events: [] }), { headers: CORS });
+    return new Response(JSON.stringify(empty), { headers: CORS });
   }
-  const events = (await fetchEspnSummary(fetch, id).catch(() => null)) || [];
-  return new Response(JSON.stringify({ events }), { headers: CORS });
+  const detail = (await fetchEspnSummary(fetch, id).catch(() => null)) || empty;
+  return new Response(JSON.stringify(detail), { headers: CORS });
 }
