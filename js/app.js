@@ -437,8 +437,11 @@ function init() {
     if (document.hidden) { clearTimeout(state.pollTimer); } else { poll(); }
   });
 
+  // We no longer use a service worker (it caused stale code). Proactively
+  // unregister any previously-installed one so users always get fresh code.
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* PWA optional */ });
+    navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
+    if (window.caches && caches.keys) caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 
   poll(); // first poll schedules the next via scheduleNextPoll()

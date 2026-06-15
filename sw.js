@@ -1,39 +1,19 @@
-// sw.js — offline app shell for the World Cup Monitor PWA.
-// Caches the static files only; live data (cross-origin ESPN/openfootball) is
-// never cached, so it always fetches fresh.
-const CACHE = 'wc-monitor-v2';
-const ASSETS = [
-  './', 'index.html', 'css/monitor.css',
-  'js/app.js', 'js/config.js', 'js/data.js', 'js/render.js',
-  'shared/core.js', 'shared/sources.js', 'shared/mock.js',
-  'favicon.svg', 'favicon.ico', 'apple-touch-icon.png',
-  'icon-192.png', 'icon-512.png', 'manifest.json',
-];
-
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
-});
+// sw.js — self-unregistering kill switch.
+// The earlier service worker cached the app shell and kept serving STALE code
+// after updates. We no longer use a service worker: this version clears all
+// caches, unregisters itself, and reloads open clients so the latest code loads.
+self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+  e.waitUntil((async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+      await self.registration.unregister();
+      const clients = await self.clients.matchAll({ type: 'window' });
+      clients.forEach((c) => c.navigate(c.url)); // reload -> fresh from network
+    } catch (_) { /* ignore */ }
+  })());
 });
 
-// Network-first for same-origin assets: always get the latest code when online;
-// fall back to cache only when offline. (Cache-first served stale code after
-// updates.) Cross-origin data APIs are never intercepted.
-self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.origin !== location.origin) return;
-  e.respondWith(
-    fetch(e.request).then((res) => {
-      if (res && res.ok) {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-      }
-      return res;
-    }).catch(() => caches.match(e.request))
-  );
-});
+// No fetch handler: every request goes straight to the network.
