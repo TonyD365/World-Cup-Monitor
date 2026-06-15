@@ -40,9 +40,12 @@ function mapEspnStatus(state) {
 function espnEventType(typeTxt = '') {
   const t = (typeTxt || '').toLowerCase();
   if (t.includes('goal kick')) return 'info';
-  // Only true period boundaries are centered phase markers (NOT "added time
-  // announced", which is a normal info line).
-  if (/kick[\s-]?off|half[\s-]?time|full[\s-]?time|(first|second) half (begins|ends)|match (begins|ended)|end of (the )?(1st|2nd|first|second) half/.test(t)) {
+  // Added-time / stoppage-time announcement (its own centered marker).
+  if (/(fourth|4th) official|minutes of (added|stoppage)|added time will be|stoppage time will be/.test(t)) {
+    return 'addedtime';
+  }
+  // Period boundaries (incl. extra time / penalties) -> centered phase markers.
+  if (/kick[\s-]?off|half[\s-]?time|full[\s-]?time|(first|second) half (begins|ends)|match (begins|ended)|end of (the )?(1st|2nd|first|second) half|extra[\s-]?time|penalty shootout|penalties begin/.test(t)) {
     return 'half';
   }
   if (t.includes('own goal')) return 'goal';
@@ -307,16 +310,20 @@ function clockFrac(c) {
   return parseInt(mm[1], 10) + (mm[2] ? parseInt(mm[2], 10) / 100 : 0);
 }
 
-// Chronological sort position. Period boundaries get synthetic minutes so they
-// land correctly: kick off=0, end-of-1st/half-time=45.99, 2nd-half start=46,
-// full time=last.
+// Chronological sort position, driven by the boundary's own clock minute so it
+// works for extra time too (no fixed synthetics that would mis-order ET):
+//   "begins" boundaries -> minute + 0.001 (just before that minute's plays)
+//   "ends"   boundaries -> minute + 0.99  (just after that minute's stoppage)
 function eventSortPos(ev) {
   if (ev.type === 'half') {
     const d = (ev.detail || '').toLowerCase();
-    if (/kick[\s-]?off|first half (begins|start)|match begins/.test(d)) return -1; // very top
-    if (/second half (begins|start)|start of (the )?second half/.test(d)) return 46;
-    if (/full[\s-]?time|match ended|second half ends|end of (the )?(2nd|second) half/.test(d)) return 1000;
-    return 45.99; // half time / first half ends / end of first half
+    const base = ev.minF != null ? Math.floor(ev.minF) : null;
+    if (/penalt/.test(d)) return 100000; // shootout last
+    if (/kick[\s-]?off|first half (begins|start)|match begins/.test(d)) return base != null && base > 1 ? base + 0.001 : -1;
+    if (/extra[\s-]?time/.test(d)) return /(begins|start)/.test(d) ? (base != null ? base : 91) + 0.001 : (base != null ? base : 120) + 0.99;
+    if (/(begins|start)/.test(d)) return (base != null ? base : 46) + 0.001; // 2nd half begins
+    if (/full[\s-]?time|match ended|second half ends|end of (the )?(2nd|second) half/.test(d)) return (base != null ? base : 90) + 0.99;
+    return (base != null ? base : 45) + 0.99; // half time / first half ends
   }
   return ev.minF != null ? ev.minF : (ev.min != null ? ev.min : 0);
 }
@@ -351,7 +358,15 @@ function parseEspnEvents(data) {
   const seen = new Set();
   const add = (clock, typeTxt, teamId, player, detail, assist = '') => {
     let type = espnEventType(typeTxt || detail || '');
-    if (/drinks? break|cooling break|hydration break/i.test(`${typeTxt || ''} ${detail || ''}`)) type = 'break';
+    // Boundary / added-time / break phrases often live in the text, not the play
+    // type. Only override generic ('info') events so a goal that merely mentions
+    // "half time" isn't reclassified.
+    if (type === 'info') {
+      const blob = `${typeTxt || ''} ${detail || ''}`;
+      if (/drinks? break|cooling break|hydration break/i.test(blob)) type = 'break';
+      else if (/(fourth|4th) official|minutes of (added|stoppage) time|added time will be|stoppage time will be/i.test(blob)) type = 'addedtime';
+      else if (/half[\s-]?time|(first|second) half (begins|ends)|full[\s-]?time|match (begins|ended)|end of (the )?(first|second|1st|2nd) half|kick[\s-]?off|extra[\s-]?time|penalty shootout|penalties begin/i.test(blob)) type = 'half';
+    }
     const min = clockToMin(clock);
     const key = `${min}|${type}|${player}|${(detail || '').slice(0, 40)}`;
     if (seen.has(key)) return;

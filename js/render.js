@@ -6,9 +6,9 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '
 const EVENT_ICON = {
   goal: '⚽', yellow: '🟨', red: '🟥', sub: '⇄', penalty: '🥅', corner: '🚩',
   foul: '⚠', offside: '🏴', throwin: '↪', freekick: '◎', var: '📺', save: '🧤',
-  shot: '🎯', half: '⏱', break: '💧', info: '·',
+  shot: '🎯', half: '⏱', break: '💧', addedtime: '➕', info: '·',
 };
-const PHASE_TYPES = new Set(['half', 'break']);
+const PHASE_TYPES = new Set(['half', 'break', 'addedtime']);
 
 // Cache of last-rendered signatures so we only touch the DOM when content
 // actually changes. This avoids the Google-Translate flicker that happened when
