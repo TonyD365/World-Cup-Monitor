@@ -39,15 +39,12 @@ function mapEspnStatus(state) {
 
 function espnEventType(typeTxt = '') {
   const t = (typeTxt || '').toLowerCase();
-  // Phase markers first so "Kick Off" / "Goal Kick" aren't mistaken for goals.
-  if (
-    t.includes('kick off') || t.includes('kick-off') || t.includes('kickoff') ||
-    t.includes('half time') || t.includes('half-time') || t.includes('halftime') ||
-    t.includes('first half') || t.includes('second half') || t.includes('end of') ||
-    t.includes('full time') || t.includes('full-time') || t.includes('stoppage') ||
-    t.includes('added time') || t.includes('whistle') || t.includes('match ended')
-  ) return 'half';
   if (t.includes('goal kick')) return 'info';
+  // Only true period boundaries are centered phase markers (NOT "added time
+  // announced", which is a normal info line).
+  if (/kick[\s-]?off|half[\s-]?time|full[\s-]?time|first half ends|second half ends|match ended|end of (the )?(1st|2nd|first|second) half/.test(t)) {
+    return 'half';
+  }
   if (t.includes('own goal')) return 'goal';
   if (t.includes('goal') || t.includes('penalty - scored') || t.includes('scored')) return 'goal';
   if (t.includes('penalty - missed') || t.includes('penalty')) return 'penalty';

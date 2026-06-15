@@ -501,6 +501,33 @@ function shotDistanceYd(s) {
   return Math.round(Math.hypot((gx - s.x) * 115, (0.5 - s.y) * 74));
 }
 
+// Best-effort player name from the play text, e.g. "N. Pépé (Ivory Coast) ...".
+function shotPlayer(text) {
+  if (!text) return '';
+  const paren = /([A-Za-zÀ-ÿ][\wÀ-ÿ.'’-]*(?:\s+[A-Za-zÀ-ÿ][\wÀ-ÿ.'’-]*){0,3})\s*\(/.exec(text);
+  if (paren) return paren[1].trim();
+  return text.split(/[.,]/)[0].trim().slice(0, 28);
+}
+
+// 2D goal-front view with an approximate placement marker (no zone data, so the
+// position is inferred from the result; labelled "approx").
+function goalFrontSvg(result) {
+  const inside = result === 'goal' || result === 'save';
+  const pos = result === 'goal' ? { x: 30, y: 17 }
+    : result === 'save' ? { x: 21, y: 15 }
+      : result === 'block' ? { x: 30, y: 25 }
+        : { x: 52, y: 12 }; // miss → outside, top-right
+  const cls = result === 'goal' ? 'shot-goal' : result === 'save' ? 'shot-save' : result === 'block' ? 'shot-block' : 'shot-miss';
+  return `<svg class="goal-svg" viewBox="0 0 60 34" preserveAspectRatio="xMidYMid meet">
+    <g class="goal-net">${Array.from({ length: 7 }, (_, i) => `<line x1="${13 + i * 5.6}" y1="6" x2="${13 + i * 5.6}" y2="29"/>`).join('')}
+      ${Array.from({ length: 4 }, (_, i) => `<line x1="12" y1="${9 + i * 5.5}" x2="48" y2="${9 + i * 5.5}"/>`).join('')}</g>
+    <path d="M12 29 L12 6 L48 6 L48 29" class="goal-frame"/>
+    <line x1="2" y1="29" x2="58" y2="29" class="goal-ground"/>
+    <circle cx="${pos.x}" cy="${pos.y}" r="2.4" class="${cls} goal-mark"/>
+    ${inside ? '' : `<text x="30" y="33" class="goal-note">approx</text>`}
+  </svg>`;
+}
+
 // Shot map with filters (All/Goal/Save/Off Target/Block) and a tappable detail
 // card — closer to ESPN's. (xG/xGOT/zone aren't in the free plays feed.)
 export function renderShotMap(detail, filter, sel) {
@@ -538,20 +565,23 @@ export function renderShotMap(detail, filter, sel) {
     const st = SHOT_STYLE[s.result] || SHOT_STYLE.miss;
     const idxs = shots.map((_, i) => i).filter((i) => filter === 'all' || shots[i].result === filter);
     const pos = idxs.indexOf(sel);
+    const cell = (val, label) => `<div><b translate="no">${val}</b><span>${label}</span></div>`;
     card = `<div class="shot-card">
-      <div class="sc-head">
-        <span class="sc-res ${st.cls}-leg">● ${st.label}</span>
-        <span class="sc-nav"><button class="shot-nav" data-d="-1" type="button">◀</button>
-          <span class="sc-count" translate="no">${pos + 1} / ${idxs.length}</span>
-          <button class="shot-nav" data-d="1" type="button">▶</button></span>
-        <span class="sc-min" translate="no">${s.min ? s.min + "'" : ''}</span>
+      <div class="sc-left">
+        <div class="sc-res-badge ${st.cls}">${st.label}</div>
+        ${goalFrontSvg(s.result)}
+        <div class="sc-count" translate="no">${pos + 1} of ${idxs.length}</div>
       </div>
-      <div class="sc-txt" translate="no">${esc(s.text || '')}</div>
-      <div class="sc-grid">
-        <div><b translate="no">${shotDistanceYd(s)} yd</b><span>Distance</span></div>
-        <div><b>—</b><span>xG</span></div>
-        <div><b>—</b><span>Shot Type</span></div>
-        <div><b>—</b><span>Goal Zone</span></div>
+      <div class="sc-right">
+        <div class="sc-phead">
+          <div class="sc-player" translate="no">${esc(shotPlayer(s.text) || '—')}</div>
+          <div class="sc-min" translate="no">${s.min ? s.min + "'" : ''}</div>
+        </div>
+        <div class="sc-grid">
+          ${cell('—', 'xG')}${cell('—', 'xGOT')}${cell(`${shotDistanceYd(s)} yd`, 'Distance')}
+          ${cell('—', 'Situation')}${cell('—', 'Shot Type')}${cell('—', 'Goal Zone')}
+        </div>
+        <div class="sc-nav"><button class="shot-nav" data-d="-1" type="button">◀ Prev</button><button class="shot-nav" data-d="1" type="button">Next ▶</button></div>
       </div>
     </div>`;
   }
