@@ -98,7 +98,17 @@ function teamLabel(sides, id) {
 
 // ---- ESPN -----------------------------------------------------------------
 export async function fetchEspn(fetchImpl) {
-  const data = await getJSON(fetchImpl, `${ESPN_BASE}/scoreboard`);
+  // Default scoreboard only returns TODAY's matches, so finished matches from
+  // previous days lose their ESPN id (and thus Timeline/Lineups). Request a
+  // date range covering recent + upcoming days so they keep it.
+  const ymd = (d) => d.toISOString().slice(0, 10).replace(/-/g, '');
+  const now = new Date();
+  const start = new Date(now); start.setUTCDate(now.getUTCDate() - 4);
+  const end = new Date(now); end.setUTCDate(now.getUTCDate() + 10);
+  let data = await getJSON(fetchImpl, `${ESPN_BASE}/scoreboard?dates=${ymd(start)}-${ymd(end)}`);
+  if (!data || !Array.isArray(data.events) || !data.events.length) {
+    data = await getJSON(fetchImpl, `${ESPN_BASE}/scoreboard`); // fallback: today only
+  }
   if (!data || !Array.isArray(data.events)) return [];
   const out = [];
   for (const ev of data.events) {
