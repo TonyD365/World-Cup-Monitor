@@ -6,7 +6,7 @@
 //   2. If everything is empty/unreachable, fall back to mock DEMO data.
 import { CONFIG } from './config.js';
 import { mergeMatches, effectiveAuthority } from '../shared/core.js';
-import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchEspnPlays, fetchEspnSituation, fetchOpenfootballStandings } from '../shared/sources.js';
+import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchOpenfootballStandings } from '../shared/sources.js';
 import { mockMatches, mockDetail } from '../shared/mock.js';
 
 // Resolve a real player photo by name via TheSportsDB (free key, CORS-ok) when
@@ -85,32 +85,12 @@ export async function loadMatches() {
   return { matches, authority: effectiveAuthority(matches), demo };
 }
 
-// Short cache for the heavy plays feed so 1s polling doesn't hammer the API.
-const _playsCache = new Map(); // eid -> { at, data }
-async function cachedPlays(eid) {
-  const now = Date.now();
-  const c = _playsCache.get(eid);
-  if (c && now - c.at < 2000) return c.data;
-  const d = await fetchEspnPlays(fetch, eid).catch(() => null);
-  _playsCache.set(eid, { at: now, data: d });
-  return d;
-}
-
-// Load full detail for a match: { events, lineups, stats, table } directly from
-// ESPN's summary endpoint (keyed by the ESPN numeric id). Returns null if none.
+// Load full detail for a match: { events, lineups, stats, table } from ESPN's
+// summary endpoint (keyed by the ESPN numeric id). Returns null if none.
 export async function loadDetail(match) {
   if (!match) return null;
   if (match.sources.includes('mock')) return mockDetail(match);
   const eid = match.espnId || (/^\d+$/.test(String(match.id)) ? String(match.id) : null);
   if (!eid) return null;
-  const [detail, plays, ball] = await Promise.all([
-    fetchEspnSummary(fetch, eid).catch(() => null),
-    cachedPlays(eid), // shot map (cached; may be CORS-blocked)
-    fetchEspnSituation(fetch, eid).catch(() => null), // current ball — always latest
-  ]);
-  if (!detail && !plays && !ball) return null;
-  const out = detail || { events: [], lineups: [], stats: [], table: [] };
-  out.plays = plays;
-  out.ball = ball;
-  return out;
+  return (await fetchEspnSummary(fetch, eid).catch(() => null)) || null;
 }

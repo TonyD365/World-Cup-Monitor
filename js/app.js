@@ -14,8 +14,6 @@ import {
   renderLineups,
   renderStats,
   renderTable,
-  renderBallField,
-  renderShotMap,
   renderTeamSummary,
   renderMatchExtra,
 } from './render.js';
@@ -30,8 +28,6 @@ const state = {
   nextPollAt: 0,
   clockAnchor: { id: null, minute: null, at: 0 }, // anchor for second-by-second interpolation
   stopAnchor: { id: null, base: null, at: 0 }, // anchor for stoppage-time seconds
-  shotFilter: 'all',
-  shotSel: null,
   prevScores: new Map(), // matchId -> {total,h,a} for goal detection (all matches)
   prevSel: null, // {id,h,a} for flip animation on the selected scoreboard
   alertsOn: false,
@@ -263,8 +259,6 @@ function renderSelected(m) {
   renderClock();
   renderTeamSummary(m, state.detail);
   renderMatchExtra(m, state.detail);
-  renderBallField(state.detail, m); // live ball, its own panel
-  renderShotMap(state.detail, state.shotFilter, state.shotSel); // shot map panel, below the tabs
   renderEventLog(m, state.shownKeys, state.detail);
   renderActiveTab();
 }
@@ -360,8 +354,6 @@ function init() {
     state.clockAnchor = { id: null, minute: null, at: 0 };
     state.stopAnchor = { id: null, base: null, at: 0 };
     clearEventLog();
-    const bf = document.getElementById('ball-field'); if (bf) bf.innerHTML = '';
-    const sm = document.getElementById('shot-map'); if (sm) sm.innerHTML = '<div class="empty">// NO SHOT DATA</div>';
     renderMatchStrip(state.matches, state.selectedId);
     // Immediate scoreboard feedback; the event log + tabs are filled by poll()
     // once detail (lineups → jersey numbers, etc.) has loaded.
@@ -373,26 +365,6 @@ function init() {
   for (const btn of document.querySelectorAll('.tab')) {
     btn.addEventListener('click', () => showTab(btn.dataset.tab));
   }
-
-  // Shot map: filter chips, tap a shot, prev/next through the filtered shots.
-  const sm = document.getElementById('shot-map');
-  if (sm) sm.addEventListener('click', (e) => {
-    const f = e.target.closest('.shot-filter');
-    if (f) { state.shotFilter = f.dataset.f; state.shotSel = null; renderShotMap(state.detail, state.shotFilter, state.shotSel); return; }
-    const dot = e.target.closest('.shot-dot');
-    if (dot) { state.shotSel = parseInt(dot.dataset.idx, 10); renderShotMap(state.detail, state.shotFilter, state.shotSel); return; }
-    const nav = e.target.closest('.shot-nav');
-    if (nav) {
-      const shots = (state.detail && state.detail.plays && state.detail.plays.shots) || [];
-      const idxs = shots.map((s, i) => i).filter((i) => state.shotFilter === 'all' || shots[i].result === state.shotFilter);
-      if (!idxs.length) return;
-      let pos = idxs.indexOf(state.shotSel);
-      if (pos < 0) pos = 0;
-      pos = (pos + parseInt(nav.dataset.d, 10) + idxs.length) % idxs.length;
-      state.shotSel = idxs[pos];
-      renderShotMap(state.detail, state.shotFilter, state.shotSel);
-    }
-  });
 
   const at = document.getElementById('alert-toggle');
   if (at) at.addEventListener('click', () => setAlerts(!state.alertsOn));

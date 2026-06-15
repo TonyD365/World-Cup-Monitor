@@ -42,7 +42,7 @@ function espnEventType(typeTxt = '') {
   if (t.includes('goal kick')) return 'info';
   // Only true period boundaries are centered phase markers (NOT "added time
   // announced", which is a normal info line).
-  if (/kick[\s-]?off|half[\s-]?time|full[\s-]?time|first half ends|second half ends|match ended|end of (the )?(1st|2nd|first|second) half/.test(t)) {
+  if (/kick[\s-]?off|half[\s-]?time|full[\s-]?time|(first|second) half (begins|ends)|match (begins|ended)|end of (the )?(1st|2nd|first|second) half/.test(t)) {
     return 'half';
   }
   if (t.includes('own goal')) return 'goal';
@@ -59,7 +59,6 @@ function espnEventType(typeTxt = '') {
   if (t.includes('var') || t.includes('video review')) return 'var';
   if (t.includes('save')) return 'save';
   if (t.includes('shot') || t.includes('attempt') || t.includes('header')) return 'shot';
-  if (t.includes('half') || t.includes('whistle') || t.includes('kick-off') || t.includes('full time') || t.includes('full-time')) return 'half';
   return 'info';
 }
 
@@ -304,7 +303,7 @@ function clockFrac(c) {
 function eventSortPos(ev) {
   if (ev.type === 'half') {
     const d = (ev.detail || '').toLowerCase();
-    if (/kick[\s-]?off/.test(d)) return ev.minF != null && ev.minF > 1 ? ev.minF : 0;
+    if (/kick[\s-]?off|first half (begins|start)|match begins/.test(d)) return -1; // very top
     if (/second half (begins|start)|start of (the )?second half/.test(d)) return 46;
     if (/full[\s-]?time|match ended|second half ends|end of (the )?(2nd|second) half/.test(d)) return 1000;
     return 45.99; // half time / first half ends / end of first half
