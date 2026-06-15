@@ -538,3 +538,5 @@ footer {
   text-shadow: 0 0 6px var(--green-dim);
 }
 .badge b { color: var(--amber); }
+.gh-link { color: var(--green); text-decoration: none; border-bottom: 1px dashed var(--green-dim); }
+.gh-link:hover { color: var(--amber); border-bottom-color: var(--amber); text-shadow: 0 0 6px var(--amber); }
