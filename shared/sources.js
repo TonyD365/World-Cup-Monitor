@@ -439,7 +439,15 @@ function parseEspnLineups(data) {
 // Stats: [{ label, home, away }] aligned across both teams, mapped by team id.
 function parseEspnStats(data) {
   const sides = teamSides(data);
-  const teams = (data.boxscore && data.boxscore.teams) || [];
+  let teams = (data.boxscore && data.boxscore.teams) || [];
+  // Fallback: some summaries carry team stats under header competitors instead.
+  if (teams.length < 2 || !teams.some((t) => (t.statistics || []).length)) {
+    const comp = data.header && data.header.competitions && data.header.competitions[0];
+    const cs = (comp && comp.competitors) || [];
+    if (cs.length >= 2 && cs.some((c) => (c.statistics || []).length)) {
+      teams = cs.map((c) => ({ homeAway: c.homeAway, team: c.team, statistics: c.statistics || [] }));
+    }
+  }
   if (teams.length < 2) return [];
   const byId = (t) => String((t.team && t.team.id) || '');
   let home = teams.find((t) => t.homeAway === 'home') || (sides.homeId && teams.find((t) => byId(t) === sides.homeId));

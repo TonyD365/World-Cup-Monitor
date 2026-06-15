@@ -1,7 +1,7 @@
 // sw.js — offline app shell for the World Cup Monitor PWA.
 // Caches the static files only; live data (cross-origin ESPN/openfootball) is
 // never cached, so it always fetches fresh.
-const CACHE = 'wc-monitor-v1';
+const CACHE = 'wc-monitor-v2';
 const ASSETS = [
   './', 'index.html', 'css/monitor.css',
   'js/app.js', 'js/config.js', 'js/data.js', 'js/render.js',
@@ -21,19 +21,19 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+// Network-first for same-origin assets: always get the latest code when online;
+// fall back to cache only when offline. (Cache-first served stale code after
+// updates.) Cross-origin data APIs are never intercepted.
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // Only handle same-origin GETs; let data APIs hit the network untouched.
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith(
-    caches.match(e.request).then((cached) =>
-      cached || fetch(e.request).then((res) => {
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-        }
-        return res;
-      }).catch(() => cached)
-    )
+    fetch(e.request).then((res) => {
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+      }
+      return res;
+    }).catch(() => caches.match(e.request))
   );
 });
