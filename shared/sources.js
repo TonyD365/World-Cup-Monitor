@@ -273,7 +273,12 @@ export async function fetchEspnPlays(fetchImpl, eventId) {
     else if (/saved/.test(t)) result = 'save';
     else if (/block/.test(t)) result = 'block';
     else result = 'miss';
-    shots.push({ x: p.x, y: p.y, result, min: p.min, team: p.team, text: p.text });
+    // Teams switch ends at halftime; normalize 2nd-half shots (180° rotation)
+    // so each team's shots cluster at one goal (like ESPN's shot map).
+    let sx = p.x;
+    let sy = p.y;
+    if (p.min != null && p.min > 45) { sx = 1 - sx; sy = 1 - sy; }
+    shots.push({ x: sx, y: sy, result, min: p.min, team: p.team, text: p.text });
   }
   return { lastPlay, shots };
 }
