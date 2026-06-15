@@ -172,15 +172,37 @@ export function renderTeamSummary(m, detail) {
 }
 
 // Win-probability bar + match info (referee / attendance / weather), below score.
+// Rough win-probability estimate from the live scoreline + time remaining, used
+// when ESPN provides no predictor. No team ratings, so it's scoreline-driven.
+function estWinProb(m) {
+  const h = m.home.score || 0;
+  const a = m.away.score || 0;
+  const d = h - a;
+  const min = Math.min(m.minute || 0, 90);
+  const rem = Math.max(0, 90 - min);
+  const w = d * (0.6 + 0.9 * (min / 90)); // a lead is "safer" later in the match
+  const eh = Math.exp(w);
+  const ea = Math.exp(-w);
+  const ed = Math.exp(-Math.abs(w) * 0.7) * (0.6 + 0.8 * (rem / 90)) * (d === 0 ? 1.4 : 0.9);
+  const tot = eh + ea + ed;
+  const home = Math.round((eh / tot) * 100);
+  const away = Math.round((ea / tot) * 100);
+  return { home, away, draw: Math.max(0, 100 - home - away) };
+}
+
 export function renderMatchExtra(m, detail) {
   const box = el('sb-extra');
   if (!box) return;
   if (!m || !detail) { if (box.innerHTML) box.innerHTML = ''; return; }
   let html = '';
-  const p = detail.predictor;
+  let p = detail.predictor;
+  let est = false;
+  // ESPN often has no predictor for a match — estimate one for live games so the
+  // bar still shows.
+  if (!(p && (p.home || p.away)) && m.status === 'live') { p = estWinProb(m); est = true; }
   if (p && (p.home || p.away)) {
     html += `<div class="wp">
-      <div class="wp-head">WIN PROBABILITY</div>
+      <div class="wp-head">WIN PROBABILITY${est ? ' (EST)' : ''}</div>
       <div class="wp-bar"><div class="wp-h" style="width:${p.home}%"></div><div class="wp-d" style="width:${p.draw}%"></div><div class="wp-a" style="width:${p.away}%"></div></div>
       <div class="wp-legend" translate="no"><span class="wp-lh">${esc(m.home.abbr || m.home.name)} ${p.home}%</span><span class="wp-ld">Draw ${p.draw}%</span><span class="wp-la">${esc(m.away.abbr || m.away.name)} ${p.away}%</span></div>
     </div>`;
