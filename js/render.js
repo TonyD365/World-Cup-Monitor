@@ -57,8 +57,9 @@ export function renderMatchStrip(matches, selectedId, favs) {
       .map((m) => {
         const h = esc(m.home.abbr || m.home.name);
         const a = esc(m.away.abbr || m.away.name);
-        const hs = m.home.score != null ? m.home.score : '-';
-        const as = m.away.score != null ? m.away.score : '-';
+        const played = m.status === 'live' || m.status === 'ft'; // scheduled = 0-0 from ESPN
+        const hs = played && m.home.score != null ? m.home.score : '-';
+        const as = played && m.away.score != null ? m.away.score : '-';
         const cls = m.status === 'live' ? 'live' : m.status === 'ft' ? 'ft' : 'pre';
         const tag = cls === 'live' ? 'LIVE' : cls === 'ft' ? 'FT' : 'SCHED';
         const star = isFav(favs, m) ? '<span class="mb-fav">⭐</span>' : '';
@@ -118,7 +119,7 @@ export function renderScoreboard(m, favs) {
         <div class="sb-flag" translate="no">${m.home.flag && m.home.flag.length <= 4 ? m.home.flag : ''}</div>
         <div class="sb-name">${esc(m.home.name || m.home.abbr)} ${favStar(m.home.name || m.home.abbr)}</div>
       </div>
-      <div class="sb-score" translate="no"><span class="flip-num" id="score-h">${m.home.score ?? '-'}</span><span class="sb-dash">:</span><span class="flip-num" id="score-a">${m.away.score ?? '-'}</span></div>
+      <div class="sb-score" translate="no"><span class="flip-num" id="score-h">${(m.status === 'live' || m.status === 'ft') ? (m.home.score ?? '-') : '-'}</span><span class="sb-dash">:</span><span class="flip-num" id="score-a">${(m.status === 'live' || m.status === 'ft') ? (m.away.score ?? '-') : '-'}</span></div>
       <div class="sb-team away">
         <div class="sb-flag" translate="no">${m.away.flag && m.away.flag.length <= 4 ? m.away.flag : ''}</div>
         <div class="sb-name">${esc(m.away.name || m.away.abbr)} ${favStar(m.away.name || m.away.abbr)}</div>

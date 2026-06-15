@@ -218,18 +218,14 @@ function kickoffTime(m) {
 }
 
 // Build the match list AND choose a sensible default. Always keeps finished
-// matches visible alongside live + upcoming (the strip is sorted by kick-off):
-//   recent results + live + upcoming. Default selection: live > most recent
-//   result > next upcoming.
-// Returns { list, defaultId }.
+// matches visible alongside live + upcoming (the strip is sorted by kick-off).
+// Categorize by STATUS, not by score: ESPN reports scheduled matches as 0-0,
+// so a score-based check wrongly treated upcoming games as finished results.
+// Default selection: live > most recent finished > next upcoming.
 export function buildSelector(matches) {
-  const live = matches.filter(isLive).sort((a, b) => kickoffTime(b) - kickoffTime(a));
-  const results = matches
-    .filter((m) => !isLive(m) && (hasScore(m) || m.status === 'ft'))
-    .sort((a, b) => kickoffTime(b) - kickoffTime(a)); // newest finished first
-  const upcoming = matches
-    .filter((m) => !isLive(m) && !hasScore(m) && m.status !== 'ft')
-    .sort((a, b) => kickoffTime(a) - kickoffTime(b)); // soonest first
+  const live = matches.filter((m) => m.status === 'live').sort((a, b) => kickoffTime(b) - kickoffTime(a));
+  const results = matches.filter((m) => m.status === 'ft').sort((a, b) => kickoffTime(b) - kickoffTime(a));
+  const upcoming = matches.filter((m) => m.status !== 'live' && m.status !== 'ft').sort((a, b) => kickoffTime(a) - kickoffTime(b));
 
   const seen = new Set();
   const list = [];
