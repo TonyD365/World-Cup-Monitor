@@ -161,10 +161,10 @@ function ensureAudio() {
     } catch (_) { /* unsupported */ }
   }
   if (state.audioCtx && state.audioCtx.state === 'suspended') state.audioCtx.resume();
+  return state.audioCtx;
 }
 
-function beep() {
-  ensureAudio();
+function playBeep() {
   const c = state.audioCtx;
   if (!c) return;
   const now = c.currentTime;
@@ -181,6 +181,16 @@ function beep() {
     g.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.15);
     o.start(now + t); o.stop(now + t + 0.16);
   });
+}
+
+// iOS suspends the AudioContext when idle/backgrounded, so resume FIRST and play
+// only once it's running (resume() is async — playing on a suspended context is
+// silent). That's why the goal beep didn't sound.
+function beep() {
+  const c = ensureAudio();
+  if (!c) return;
+  if (c.state === 'suspended') c.resume().then(playBeep).catch(() => {});
+  else playBeep();
 }
 
 function notifyGoal(text) {
@@ -434,7 +444,8 @@ function init() {
 
   // Pause polling when hidden; resume immediately when visible.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { clearTimeout(state.pollTimer); } else { poll(); }
+    if (document.hidden) { clearTimeout(state.pollTimer); }
+    else { if (state.alertsOn) ensureAudio(); poll(); } // re-warm audio on return
   });
 
   // We no longer use a service worker (it caused stale code). Proactively
