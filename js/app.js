@@ -118,15 +118,18 @@ function selectedMatch() {
   return state.matches.find((m) => m.id === state.selectedId) || null;
 }
 
-// Show only the single group that contains BOTH teams (group stage). If there
-// isn't one (e.g. a knockout match), show no table.
+// Pick the standings group for the selected match's teams (group stage only).
 function groupsForMatch(groups, m) {
   const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
   const hn = norm(m.home.name);
   const an = norm(m.away.name);
-  const teams = (g) => g.rows.map((r) => norm(r.team));
-  const hit = groups.find((g) => { const t = teams(g); return t.includes(hn) && t.includes(an); });
-  return hit ? [hit] : [];
+  const has = (g, n) => g.rows.some((r) => norm(r.team) === n);
+  const homeG = groups.find((g) => has(g, hn));
+  const awayG = groups.find((g) => has(g, an));
+  if (homeG && awayG) return homeG === awayG ? [homeG] : []; // same group, or knockout → none
+  if (homeG) return [homeG]; // away name mismatched across sources; both share home's group
+  if (awayG) return [awayG];
+  return [];
 }
 
 // ---- goal alerts -----------------------------------------------------------
@@ -391,6 +394,14 @@ function init() {
   for (const btn of document.querySelectorAll('.tab')) {
     btn.addEventListener('click', () => showTab(btn.dataset.tab));
   }
+
+  const cl = document.getElementById('copy-link');
+  if (cl) cl.addEventListener('click', async () => {
+    const url = location.href; // includes #matchId for the selected match
+    try { await navigator.clipboard.writeText(url); } catch (_) { try { window.prompt('Copy this match link:', url); } catch (__) { /* ignore */ } return; }
+    cl.textContent = '🔗 COPIED!';
+    setTimeout(() => { cl.textContent = '🔗 COPY LINK'; }, 1500);
+  });
 
   const at = document.getElementById('alert-toggle');
   if (at) at.addEventListener('click', () => setAlerts(!state.alertsOn));

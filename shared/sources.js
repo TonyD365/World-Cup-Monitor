@@ -636,19 +636,22 @@ export async function fetchOpenfootballStandings(fetchImpl) {
   if (Array.isArray(data.rounds)) for (const r of data.rounds) rows.push(...(r.matches || []));
 
   const groups = new Map(); // groupName -> Map(team -> stats)
+  const ensureGroup = (g) => { if (!groups.has(g)) groups.set(g, new Map()); return groups.get(g); };
+  const ensureTeam = (tbl, t) => {
+    if (!tbl.has(t)) tbl.set(t, { team: t, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 });
+    return tbl.get(t);
+  };
   for (const m of rows) {
     const g = m.group;
+    if (!g || isPlaceholderTeam(m.team1) || isPlaceholderTeam(m.team2)) continue;
+    const tbl = ensureGroup(g);
+    // Seed both teams (so groups show with 0s before any game is played).
+    ensureTeam(tbl, m.team1);
+    ensureTeam(tbl, m.team2);
     const sc = m.score && m.score.ft;
-    if (!g || !sc || sc.length < 2 || sc[0] == null || sc[1] == null) continue;
-    if (isPlaceholderTeam(m.team1) || isPlaceholderTeam(m.team2)) continue;
-    if (!groups.has(g)) groups.set(g, new Map());
-    const tbl = groups.get(g);
-    const ensure = (t) => {
-      if (!tbl.has(t)) tbl.set(t, { team: t, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 });
-      return tbl.get(t);
-    };
-    const a = ensure(m.team1);
-    const b = ensure(m.team2);
+    if (!sc || sc.length < 2 || sc[0] == null || sc[1] == null) continue; // not played yet
+    const a = ensureTeam(tbl, m.team1);
+    const b = ensureTeam(tbl, m.team2);
     const g1 = sc[0];
     const g2 = sc[1];
     a.mp += 1; b.mp += 1;
