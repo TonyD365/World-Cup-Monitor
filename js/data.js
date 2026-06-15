@@ -85,6 +85,17 @@ export async function loadMatches() {
   return { matches, authority: effectiveAuthority(matches), demo };
 }
 
+// Short cache for the heavy plays feed so 1s polling doesn't hammer the API.
+const _playsCache = new Map(); // eid -> { at, data }
+async function cachedPlays(eid) {
+  const now = Date.now();
+  const c = _playsCache.get(eid);
+  if (c && now - c.at < 2000) return c.data;
+  const d = await fetchEspnPlays(fetch, eid).catch(() => null);
+  _playsCache.set(eid, { at: now, data: d });
+  return d;
+}
+
 // Load full detail for a match: { events, lineups, stats, table } directly from
 // ESPN's summary endpoint (keyed by the ESPN numeric id). Returns null if none.
 export async function loadDetail(match) {
@@ -94,7 +105,7 @@ export async function loadDetail(match) {
   if (!eid) return null;
   const [detail, plays] = await Promise.all([
     fetchEspnSummary(fetch, eid).catch(() => null),
-    fetchEspnPlays(fetch, eid).catch(() => null), // ball position + shot map (may be CORS-blocked)
+    cachedPlays(eid), // ball position + shot map (may be CORS-blocked)
   ]);
   if (!detail && !plays) return null;
   const out = detail || { events: [], lineups: [], stats: [], table: [] };

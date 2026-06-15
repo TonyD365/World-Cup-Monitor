@@ -114,7 +114,7 @@ export function renderScoreboard(m) {
     </div>
     <div class="sb-venue">${m.venue ? '@ ' + esc(m.venue) : ''}</div>
     <div class="sb-summary" id="sb-summary" translate="no"></div>
-    <div class="sb-extra" id="sb-extra"></div>
+    <div class="sb-extra" id="sb-extra" translate="no"></div>
     ${hasStats ? `<div class="sb-stats">
         ${stats.possessionHome != null ? bar('POSSESSION', stats.possessionHome, stats.possessionAway) : ''}
         ${stats.shotsHome != null ? bar('SHOTS', stats.shotsHome, stats.shotsAway) : ''}
@@ -200,7 +200,19 @@ export function renderEventLog(m, shownKeys, detail) {
     const n = numByName.get(norm(name));
     return n != null && n !== '' ? `${n} ${name}` : name;
   };
-  const evs = (m.events || []).slice().sort((a, b) => (a.min || 0) - (b.min || 0));
+  // Sort by minute; within a minute, phase markers (Half/Full Time) come last
+  // so HALF TIME sits after that minute's stoppage events.
+  const evs = (m.events || [])
+    .map((e, i) => ({ e, i }))
+    .sort((A, B) => {
+      const d = (A.e.min || 0) - (B.e.min || 0);
+      if (d) return d;
+      const pa = A.e.type === 'half' ? 1 : 0;
+      const pb = B.e.type === 'half' ? 1 : 0;
+      if (pa !== pb) return pa - pb;
+      return A.i - B.i;
+    })
+    .map((x) => x.e);
   let appended = false;
   for (const ev of evs) {
     // De-dupe goals to one line per minute+team (a goal can arrive from both
@@ -454,14 +466,20 @@ const PF_SCALE = (n) => (n == null ? null : Math.max(0, Math.min(1, n > 1.5 ? n 
 const PF_X = (n) => (PF_SCALE(n) * 98 + 1).toFixed(1);
 const PF_Y = (n) => (PF_SCALE(n) * 62 + 1).toFixed(1);
 
-// Live ball position + last play, shown below the scoreboard (live only).
+// Live ball position + last play, in its own panel (live only).
 export function renderBallField(detail, m) {
   const v = el('ball-field');
+  const panel = el('ball-panel');
   if (!v) return;
   const plays = detail && detail.plays;
   const lp = plays && plays.lastPlay;
   const live = m && m.status === 'live';
-  if (!live || !lp || lp.x == null || lp.y == null) { if (v.innerHTML) v.innerHTML = ''; return; }
+  if (!live || !lp || lp.x == null || lp.y == null) {
+    if (v.innerHTML) v.innerHTML = '';
+    if (panel) panel.hidden = true;
+    return;
+  }
+  if (panel) panel.hidden = false;
   const trail = lp.x2 != null && lp.y2 != null
     ? `<line x1="${PF_X(lp.x2)}" y1="${PF_Y(lp.y2)}" x2="${PF_X(lp.x)}" y2="${PF_Y(lp.y)}" class="pf-trail"/><circle cx="${PF_X(lp.x2)}" cy="${PF_Y(lp.y2)}" r="1.4" class="pf-trail-dot"/>`
     : '';
@@ -477,8 +495,15 @@ export function renderBallField(detail, m) {
   if (v.innerHTML !== html) v.innerHTML = html;
 }
 
-// Shot map, shown in its own panel below the tabs.
-export function renderShotMap(detail) {
+// Approx shot distance to goal in yards (pitch ≈ 115 × 74 yd).
+function shotDistanceYd(s) {
+  const gx = s.x > 0.5 ? 1 : 0;
+  return Math.round(Math.hypot((gx - s.x) * 115, (0.5 - s.y) * 74));
+}
+
+// Shot map with filters (All/Goal/Save/Off Target/Block) and a tappable detail
+// card — closer to ESPN's. (xG/xGOT/zone aren't in the free plays feed.)
+export function renderShotMap(detail, filter, sel) {
   const v = el('shot-map');
   if (!v) return;
   const shots = (detail && detail.plays && detail.plays.shots || []).filter((s) => s.x != null && s.y != null);
@@ -488,25 +513,59 @@ export function renderShotMap(detail) {
     sig.shotmap = '';
     return;
   }
-  const dots = shots
-    .map((s) => {
-      const st = SHOT_STYLE[s.result] || SHOT_STYLE.miss;
-      return `<circle cx="${PF_X(s.x)}" cy="${PF_Y(s.y)}" r="1.8" class="${st.cls}"><title>${esc(`${st.label} ${s.min ? s.min + "'" : ''} ${s.text || ''}`)}</title></circle>`;
-    })
-    .join('');
+  filter = filter || 'all';
   const counts = { goal: 0, save: 0, miss: 0, block: 0 };
   for (const s of shots) counts[s.result] = (counts[s.result] || 0) + 1;
-  const legend = Object.keys(SHOT_STYLE)
-    .map((k) => `<span class="pf-leg ${SHOT_STYLE[k].cls}-leg">● ${SHOT_STYLE[k].label} ${counts[k] || 0}</span>`)
+
+  const filters = [['all', `All ${shots.length}`], ...Object.keys(SHOT_STYLE).map((k) => [k, `${SHOT_STYLE[k].label} ${counts[k] || 0}`])];
+  const btns = filters
+    .map(([k, label]) => `<button class="shot-filter ${filter === k ? 'on' : ''} ${k !== 'all' ? SHOT_STYLE[k].cls + '-leg' : ''}" data-f="${k}">${label}</button>`)
     .join('');
+
+  const dots = shots
+    .map((s, i) => {
+      if (filter !== 'all' && s.result !== filter) return '';
+      const st = SHOT_STYLE[s.result] || SHOT_STYLE.miss;
+      const r = i === sel ? 3 : 1.9;
+      const selRing = i === sel ? `<circle cx="${PF_X(s.x)}" cy="${PF_Y(s.y)}" r="3.4" class="shot-sel"/>` : '';
+      return `${selRing}<circle cx="${PF_X(s.x)}" cy="${PF_Y(s.y)}" r="${r}" class="${st.cls} shot-dot" data-idx="${i}"><title>${esc(`${st.label} ${s.min ? s.min + "'" : ''}`)}</title></circle>`;
+    })
+    .join('');
+
+  let card = '<div class="shot-card hint">Tap a shot for details</div>';
+  if (sel != null && shots[sel]) {
+    const s = shots[sel];
+    const st = SHOT_STYLE[s.result] || SHOT_STYLE.miss;
+    const idxs = shots.map((_, i) => i).filter((i) => filter === 'all' || shots[i].result === filter);
+    const pos = idxs.indexOf(sel);
+    card = `<div class="shot-card">
+      <div class="sc-head">
+        <span class="sc-res ${st.cls}-leg">● ${st.label}</span>
+        <span class="sc-nav"><button class="shot-nav" data-d="-1" type="button">◀</button>
+          <span class="sc-count" translate="no">${pos + 1} / ${idxs.length}</span>
+          <button class="shot-nav" data-d="1" type="button">▶</button></span>
+        <span class="sc-min" translate="no">${s.min ? s.min + "'" : ''}</span>
+      </div>
+      <div class="sc-txt" translate="no">${esc(s.text || '')}</div>
+      <div class="sc-grid">
+        <div><b translate="no">${shotDistanceYd(s)} yd</b><span>Distance</span></div>
+        <div><b>—</b><span>xG</span></div>
+        <div><b>—</b><span>Shot Type</span></div>
+        <div><b>—</b><span>Goal Zone</span></div>
+      </div>
+    </div>`;
+  }
+
   const html = `
+    <div class="shot-filters">${btns}</div>
     <svg class="pitch-svg" viewBox="0 0 100 64" preserveAspectRatio="xMidYMid meet">
       <rect x="0" y="0" width="100" height="64" class="pf-grass"/>
       ${pitchSvgMarkings()}
       ${dots}
     </svg>
-    <div class="pf-legend">${legend}</div>`;
-  if (sig.shotmap !== html) { v.innerHTML = html; sig.shotmap = html; }
+    ${card}`;
+  const s = `${filter}|${sel}|${html}`;
+  if (sig.shotmap !== s) { v.innerHTML = html; sig.shotmap = s; }
 }
 
 export function renderHealth(health) {

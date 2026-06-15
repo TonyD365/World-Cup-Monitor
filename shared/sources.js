@@ -232,7 +232,7 @@ function parseEspnInfo(data) {
 // widget and shot map. Returns { lastPlay, shots } or null. Defensive: the core
 // API is $ref-heavy and may be CORS-blocked in the browser — callers handle null.
 export async function fetchEspnPlays(fetchImpl, eventId) {
-  const url = `https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world/events/${eventId}/competitions/${eventId}/plays?limit=400&lang=en`;
+  const url = `https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world/events/${eventId}/competitions/${eventId}/plays?limit=1000&lang=en`;
   const data = await getJSON(fetchImpl, url);
   const items = data && (data.items || data.plays);
   if (!Array.isArray(items)) return null;
@@ -242,17 +242,20 @@ export async function fetchEspnPlays(fetchImpl, eventId) {
     const mm = /teams\/(\d+)/.exec(r);
     return mm ? mm[1] : '';
   };
-  const norm = items.map((p) => ({
+  const norm = items.map((p, idx) => ({
     x: num(p.fieldPositionX), y: num(p.fieldPositionY),
     x2: num(p.fieldPosition2X), y2: num(p.fieldPosition2Y),
     type: (p.type && p.type.text) || '', text: p.text || p.shortText || '',
     min: (p.clock && parseInt(p.clock.displayValue, 10)) || null,
     team: teamId(p), scoring: !!p.scoringPlay,
+    seq: num(p.sequenceNumber) != null ? num(p.sequenceNumber) : idx,
   }));
 
+  // Latest play with coordinates = highest sequence number (order-independent).
   let lastPlay = null;
-  for (let i = norm.length - 1; i >= 0; i--) {
-    if (norm[i].x != null && norm[i].y != null) { lastPlay = norm[i]; break; }
+  let bestSeq = -Infinity;
+  for (const p of norm) {
+    if (p.x != null && p.y != null && p.seq >= bestSeq) { bestSeq = p.seq; lastPlay = p; }
   }
   if (!lastPlay && norm.length) lastPlay = norm[norm.length - 1];
 
