@@ -25,8 +25,15 @@ function statusLabel(m) {
   return 'SCHEDULED';
 }
 
+const favKey = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+function isFav(favs, m) {
+  if (!favs || !favs.size) return false;
+  return favs.has(favKey(m.home.name)) || favs.has(favKey(m.away.name)) ||
+    favs.has(favKey(m.home.abbr)) || favs.has(favKey(m.away.abbr));
+}
+
 // Render matches as a horizontal, time-sorted timeline of clickable boxes.
-export function renderMatchStrip(matches, selectedId) {
+export function renderMatchStrip(matches, selectedId, favs) {
   const strip = el('match-strip');
   const { list, defaultId } = buildSelector(matches);
   const sorted = list.slice().sort((a, b) => (Date.parse(a.kickoff) || 0) - (Date.parse(b.kickoff) || 0));
@@ -54,8 +61,9 @@ export function renderMatchStrip(matches, selectedId) {
         const as = m.away.score != null ? m.away.score : '-';
         const cls = m.status === 'live' ? 'live' : m.status === 'ft' ? 'ft' : 'pre';
         const tag = cls === 'live' ? 'LIVE' : cls === 'ft' ? 'FT' : 'SCHED';
-        return `<button class="match-box ${m.id === sel ? 'active' : ''}" data-id="${esc(m.id)}">
-          <div class="mb-day">${fmtDay(m.kickoff)}</div>
+        const star = isFav(favs, m) ? '<span class="mb-fav">⭐</span>' : '';
+        return `<button class="match-box ${m.id === sel ? 'active' : ''} ${isFav(favs, m) ? 'fav' : ''}" data-id="${esc(m.id)}">
+          ${star}<div class="mb-day">${fmtDay(m.kickoff)}</div>
           <div class="mb-time">${timeRange(m.kickoff)}</div>
           <div class="mb-row"><span class="mb-team">${h}</span><span class="mb-sc">${hs}</span></div>
           <div class="mb-row"><span class="mb-team">${a}</span><span class="mb-sc">${as}</span></div>
@@ -89,13 +97,17 @@ function bar(label, pctHome, pctAway) {
   return statItem(label, `${h}%`, `${a}%`, h, a);
 }
 
-export function renderScoreboard(m) {
+export function renderScoreboard(m, favs) {
   const panel = el('scoreboard');
   if (!m) {
     panel.innerHTML = '<div class="empty">// NO MATCH SELECTED</div>';
     sig.scoreboard = '';
     return;
   }
+  const favStar = (team) => {
+    const on = favs && favs.has(favKey(team));
+    return `<button class="fav-star ${on ? 'on' : ''}" data-team="${esc(team)}" title="Favorite" type="button">${on ? '★' : '☆'}</button>`;
+  };
   const stats = m.stats || {};
   const hasStats = stats.possessionHome != null || stats.shotsHome != null;
   const html = `
@@ -104,12 +116,12 @@ export function renderScoreboard(m) {
     <div class="sb-main">
       <div class="sb-team home">
         <div class="sb-flag" translate="no">${m.home.flag && m.home.flag.length <= 4 ? m.home.flag : ''}</div>
-        <div class="sb-name">${esc(m.home.name || m.home.abbr)}</div>
+        <div class="sb-name">${esc(m.home.name || m.home.abbr)} ${favStar(m.home.name || m.home.abbr)}</div>
       </div>
       <div class="sb-score" translate="no"><span class="flip-num" id="score-h">${m.home.score ?? '-'}</span><span class="sb-dash">:</span><span class="flip-num" id="score-a">${m.away.score ?? '-'}</span></div>
       <div class="sb-team away">
         <div class="sb-flag" translate="no">${m.away.flag && m.away.flag.length <= 4 ? m.away.flag : ''}</div>
-        <div class="sb-name">${esc(m.away.name || m.away.abbr)}</div>
+        <div class="sb-name">${esc(m.away.name || m.away.abbr)} ${favStar(m.away.name || m.away.abbr)}</div>
       </div>
     </div>
     <div class="sb-venue">${m.venue ? '@ ' + esc(m.venue) : ''}</div>
@@ -593,6 +605,29 @@ export function renderShotMap(detail, filter, sel) {
     ${card}`;
   const s = `${filter}|${sel}|${html}`;
   if (sig.shotmap !== s) { v.innerHTML = html; sig.shotmap = s; }
+}
+
+// Knockout bracket: one column per round, each a list of ties.
+export function renderBracket(bracket) {
+  const v = el('bracket');
+  const panel = el('bracket-panel');
+  if (!v) return;
+  const rounds = (bracket || []).filter((r) => r.matches && r.matches.length);
+  if (!rounds.length) { if (panel) panel.hidden = true; sig.bracket = ''; return; }
+  const tie = (t) => {
+    const sc = t.s1 != null && t.s2 != null;
+    const w1 = sc && t.s1 > t.s2;
+    const w2 = sc && t.s2 > t.s1;
+    return `<div class="bk-tie">
+      <div class="bk-row ${w1 ? 'bk-win' : ''}"><span class="bk-team">${esc(t.team1)}</span><span class="bk-sc">${t.s1 != null ? t.s1 : ''}</span></div>
+      <div class="bk-row ${w2 ? 'bk-win' : ''}"><span class="bk-team">${esc(t.team2)}</span><span class="bk-sc">${t.s2 != null ? t.s2 : ''}</span></div>
+    </div>`;
+  };
+  const html = `<div class="bracket-cols">${rounds
+    .map((r) => `<div class="bk-col"><div class="bk-round">${esc(r.name)}</div>${r.matches.map(tie).join('')}</div>`)
+    .join('')}</div>`;
+  if (sig.bracket !== html) { v.innerHTML = html; sig.bracket = html; }
+  if (panel) panel.hidden = false;
 }
 
 export function renderHealth(health) {

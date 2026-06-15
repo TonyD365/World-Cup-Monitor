@@ -8,6 +8,11 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="WC Monitor" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet" />
@@ -43,6 +48,7 @@
 
     <div class="toolbar">
       <label>&gt; SELECT MATCH (timeline):</label>
+      <span id="next-match" class="next-match" translate="no"></span>
       <button id="alert-toggle" class="alert-btn" type="button" translate="no">🔔 ALERTS: OFF</button>
       <span class="poll">
         <span>REFRESH</span>
@@ -71,6 +77,11 @@
         <div class="tab-view" id="view-table" hidden></div>
       </section>
     </div>
+
+    <section class="panel" id="bracket-panel" hidden>
+      <h2>// KNOCKOUT BRACKET</h2>
+      <div id="bracket" translate="no"></div>
+    </section>
 
     <footer>
       <span class="badge">OFFICIAL PRECEDENCE: <b id="authority">—</b></span>

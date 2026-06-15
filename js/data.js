@@ -6,7 +6,7 @@
 //   2. If everything is empty/unreachable, fall back to mock DEMO data.
 import { CONFIG } from './config.js';
 import { mergeMatches, effectiveAuthority } from '../shared/core.js';
-import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchOpenfootballStandings } from '../shared/sources.js';
+import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchOpenfootballStandings, fetchOpenfootballBracket } from '../shared/sources.js';
 import { mockMatches, mockDetail } from '../shared/mock.js';
 
 // Resolve a real player photo by name via TheSportsDB (free key, CORS-ok) when
@@ -46,6 +46,17 @@ export async function loadStandings() {
   const g = await fetchOpenfootballStandings(fetch).catch(() => null);
   if (g && g.length) { _standings = g; _standingsAt = now; }
   return _standings || [];
+}
+
+// Knockout bracket from openfootball, cached.
+let _bracket = null;
+let _bracketAt = 0;
+export async function loadBracket() {
+  const now = Date.now();
+  if (_bracket && now - _bracketAt < 5 * 60 * 1000) return _bracket;
+  const b = await fetchOpenfootballBracket(fetch).catch(() => null);
+  if (b) { _bracket = b; _bracketAt = now; }
+  return _bracket || [];
 }
 
 // Health of each source for the status LEDs.

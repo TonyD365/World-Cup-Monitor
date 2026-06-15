@@ -1,6 +1,6 @@
 // js/app.js — controller: polling loop, selector wiring, state.
 import { CONFIG } from './config.js';
-import { loadMatches, loadDetail, loadStandings, resolvePlayerPhoto, health } from './data.js';
+import { loadMatches, loadDetail, loadStandings, loadBracket, resolvePlayerPhoto, health } from './data.js';
 import {
   renderMatchStrip,
   renderScoreboard,
@@ -16,6 +16,7 @@ import {
   renderTable,
   renderTeamSummary,
   renderMatchExtra,
+  renderBracket,
 } from './render.js';
 
 const state = {
@@ -28,6 +29,9 @@ const state = {
   nextPollAt: 0,
   clockAnchor: { id: null, minute: null, at: 0 }, // anchor for second-by-second interpolation
   stopAnchor: { id: null, base: null, at: 0 }, // anchor for stoppage-time seconds
+  pollTimer: null,
+  pollInterval: CONFIG.POLL_INTERVAL,
+  favorites: loadFavorites(), // Set of normalized team names
   prevScores: new Map(), // matchId -> {total,h,a} for goal detection (all matches)
   prevSel: null, // {id,h,a} for flip animation on the selected scoreboard
   alertsOn: false,
@@ -254,7 +258,7 @@ async function upgradeLineupPhotos() {
 
 // Render the selected match's scoreboard + all dependent panels.
 function renderSelected(m) {
-  renderScoreboard(m);
+  renderScoreboard(m, state.favorites);
   flipScoreIfChanged(m);
   renderClock();
   renderTeamSummary(m, state.detail);
@@ -283,12 +287,18 @@ async function poll() {
       }
     }
 
-    const newSelected = renderMatchStrip(matches, state.selectedId);
+    // Prefer a favorite match (live first) when nothing is selected yet.
+    if (!state.selectedId) {
+      const fav = matches.find((mm) => mm.status === 'live' && isFavMatch(mm)) || matches.find(isFavMatch);
+      if (fav) state.selectedId = fav.id;
+    }
+    const newSelected = renderMatchStrip(matches, state.selectedId, state.favorites);
     if (newSelected !== state.selectedId) {
       state.selectedId = newSelected;
       state.shownKeys.clear();
       clearEventLog();
     }
+    if (state.selectedId) { try { history.replaceState(null, '', `#${encodeURIComponent(state.selectedId)}`); } catch (_) { /* ignore */ } }
 
     const m = selectedMatch();
     if (m) {
@@ -318,14 +328,27 @@ async function poll() {
     renderSelected(m);
     setLastPoll(new Date());
     refreshFlash();
+    loadBracket().then(renderBracket).catch(() => {}); // knockout bracket (cached)
   } catch (err) {
     console.error('poll error', err);
   } finally {
-    state.nextPollAt = Date.now() + CONFIG.POLL_INTERVAL;
+    scheduleNextPoll();
   }
 }
 
+// Adaptive polling: fast (1s) while a match is live, slow (5s) otherwise, and
+// fully paused while the tab is hidden — saves requests/battery.
+function scheduleNextPoll() {
+  clearTimeout(state.pollTimer);
+  if (document.hidden) { state.nextPollAt = 0; return; }
+  const hasLive = state.matches.some((m) => m.status === 'live');
+  state.pollInterval = hasLive ? CONFIG.POLL_INTERVAL : CONFIG.IDLE_INTERVAL;
+  state.nextPollAt = Date.now() + state.pollInterval;
+  state.pollTimer = setTimeout(poll, state.pollInterval);
+}
+
 function tickUptime() {
+  if (document.hidden) return;
   const s = Math.floor((Date.now() - state.startedAt) / 1000);
   const hh = String(Math.floor(s / 3600)).padStart(2, '0');
   const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
@@ -333,14 +356,16 @@ function tickUptime() {
   const up = document.getElementById('uptime');
   if (up) up.textContent = `${hh}:${mm}:${ss}`;
 
+  const interval = state.pollInterval || CONFIG.POLL_INTERVAL;
   const remain = Math.max(0, state.nextPollAt - Date.now());
-  const pct = 100 * (1 - remain / CONFIG.POLL_INTERVAL);
+  const pct = 100 * (1 - remain / interval);
   const bar = document.getElementById('poll-progress');
   if (bar) bar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
   const cd = document.getElementById('next-poll');
   if (cd) cd.textContent = `${(remain / 1000).toFixed(1)}s`;
 
   renderClock();
+  renderNextMatch();
 }
 
 function init() {
@@ -354,10 +379,11 @@ function init() {
     state.clockAnchor = { id: null, minute: null, at: 0 };
     state.stopAnchor = { id: null, base: null, at: 0 };
     clearEventLog();
-    renderMatchStrip(state.matches, state.selectedId);
+    try { history.replaceState(null, '', `#${encodeURIComponent(state.selectedId)}`); } catch (_) { /* ignore */ }
+    renderMatchStrip(state.matches, state.selectedId, state.favorites);
     // Immediate scoreboard feedback; the event log + tabs are filled by poll()
     // once detail (lineups → jersey numbers, etc.) has loaded.
-    renderScoreboard(selectedMatch());
+    renderScoreboard(selectedMatch(), state.favorites);
     renderClock();
     poll(); // fetch detail for the newly selected match right away
   });
@@ -381,10 +407,64 @@ function init() {
     }
   } catch (_) { /* ignore */ }
 
-  state.nextPollAt = Date.now() + CONFIG.POLL_INTERVAL;
-  poll();
-  setInterval(poll, CONFIG.POLL_INTERVAL);
+  // Deep link: restore the selected match from the URL hash.
+  const h = decodeURIComponent((location.hash || '').slice(1));
+  if (h) state.selectedId = h;
+
+  // Favorite-team star toggles (delegated on the scoreboard).
+  const sb = document.getElementById('scoreboard');
+  if (sb) sb.addEventListener('click', (e) => {
+    const star = e.target.closest('.fav-star');
+    if (!star) return;
+    toggleFavorite(star.dataset.team);
+    renderScoreboard(selectedMatch(), state.favorites);
+    renderMatchStrip(state.matches, state.selectedId, state.favorites);
+  });
+
+  // Pause polling when hidden; resume immediately when visible.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { clearTimeout(state.pollTimer); } else { poll(); }
+  });
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* PWA optional */ });
+  }
+
+  poll(); // first poll schedules the next via scheduleNextPoll()
   setInterval(tickUptime, 100);
+}
+
+// ---- favorites + next-match countdown -------------------------------------
+const favNorm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+function loadFavorites() {
+  try { return new Set(JSON.parse(localStorage.getItem('wc_fav') || '[]')); } catch (_) { return new Set(); }
+}
+function toggleFavorite(team) {
+  const k = favNorm(team);
+  if (!k) return;
+  if (state.favorites.has(k)) state.favorites.delete(k); else state.favorites.add(k);
+  try { localStorage.setItem('wc_fav', JSON.stringify([...state.favorites])); } catch (_) { /* ignore */ }
+}
+function isFavMatch(m) {
+  return state.favorites.has(favNorm(m.home.name)) || state.favorites.has(favNorm(m.away.name)) ||
+    state.favorites.has(favNorm(m.home.abbr)) || state.favorites.has(favNorm(m.away.abbr));
+}
+
+function renderNextMatch() {
+  const el2 = document.getElementById('next-match');
+  if (!el2) return;
+  const now = Date.now();
+  const upcoming = state.matches
+    .filter((m) => m.status === 'pre' && Date.parse(m.kickoff) > now)
+    .sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff))[0];
+  if (!upcoming) { el2.textContent = ''; return; }
+  const diff = Math.max(0, Date.parse(upcoming.kickoff) - now);
+  const hh = String(Math.floor(diff / 3600000)).padStart(2, '0');
+  const mm = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0');
+  const ss = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
+  const a = upcoming.home.abbr || upcoming.home.name;
+  const b = upcoming.away.abbr || upcoming.away.name;
+  el2.textContent = `NEXT: ${a} v ${b} · ${hh}:${mm}:${ss}`;
 }
 
 if (document.readyState === 'loading') {

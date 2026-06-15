@@ -673,6 +673,34 @@ export async function fetchOpenfootballStandings(fetchImpl) {
   return out;
 }
 
+// Knockout bracket from openfootball: matches without a `group` are knockout
+// ties. Returns [{ name, matches:[{team1,team2,s1,s2}] }] ordered by round.
+export async function fetchOpenfootballBracket(fetchImpl) {
+  let data = null;
+  for (const url of OPENFOOTBALL_URLS) {
+    data = await getJSON(fetchImpl, url);
+    if (data && (data.rounds || data.matches)) break;
+  }
+  if (!data) return [];
+  const rows = [];
+  if (Array.isArray(data.matches)) rows.push(...data.matches);
+  if (Array.isArray(data.rounds)) for (const r of data.rounds) rows.push(...(r.matches || []));
+
+  const ORDER = ['round of 32', 'round of 16', 'quarter', 'semi', 'third', 'final'];
+  const byRound = new Map();
+  for (const m of rows) {
+    if (m.group || !m.round || /matchday|group/i.test(m.round)) continue; // group stage
+    if (!byRound.has(m.round)) byRound.set(m.round, []);
+    const sc = m.score && m.score.ft;
+    byRound.get(m.round).push({
+      team1: m.team1 || 'TBD', team2: m.team2 || 'TBD',
+      s1: sc ? sc[0] : null, s2: sc ? sc[1] : null,
+    });
+  }
+  const key = (r) => { const i = ORDER.findIndex((k) => r.toLowerCase().includes(k)); return i < 0 ? ORDER.length : i; };
+  return [...byRound.entries()].sort((a, b) => key(a[0]) - key(b[0])).map(([name, matches]) => ({ name, matches }));
+}
+
 // A real fixture has named countries; bracket slots ("2A", "W73", "3A/B/C",
 // "L101") are placeholders we don't want cluttering the monitor.
 function isPlaceholderTeam(name) {
