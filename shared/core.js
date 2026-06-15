@@ -217,25 +217,29 @@ function kickoffTime(m) {
   return isNaN(t) ? 0 : t;
 }
 
-// Build the dropdown list AND choose a sensible default:
-//   - if any match is live -> show only live matches.
-//   - otherwise -> show recent results (most recent first) followed by the
-//     next upcoming fixtures, so the monitor always shows real scores.
+// Build the match list AND choose a sensible default. Always keeps finished
+// matches visible alongside live + upcoming (the strip is sorted by kick-off):
+//   recent results + live + upcoming. Default selection: live > most recent
+//   result > next upcoming.
 // Returns { list, defaultId }.
 export function buildSelector(matches) {
   const live = matches.filter(isLive).sort((a, b) => kickoffTime(b) - kickoffTime(a));
-  if (live.length) {
-    return { list: live, defaultId: live[0].id };
-  }
   const results = matches
-    .filter((m) => hasScore(m))
-    .sort((a, b) => kickoffTime(b) - kickoffTime(a)); // newest result first
+    .filter((m) => !isLive(m) && (hasScore(m) || m.status === 'ft'))
+    .sort((a, b) => kickoffTime(b) - kickoffTime(a)); // newest finished first
   const upcoming = matches
-    .filter((m) => !hasScore(m) && m.status !== 'ft')
+    .filter((m) => !isLive(m) && !hasScore(m) && m.status !== 'ft')
     .sort((a, b) => kickoffTime(a) - kickoffTime(b)); // soonest first
-  const list = [...results.slice(0, 20), ...upcoming.slice(0, 20)];
+
+  const seen = new Set();
+  const list = [];
+  for (const m of [...results.slice(0, 30), ...live, ...upcoming.slice(0, 30)]) {
+    if (!seen.has(m.id)) { seen.add(m.id); list.push(m); }
+  }
   const final = list.length ? list : matches;
-  return { list: final, defaultId: final[0] ? final[0].id : null };
+  const defaultId = (live[0] && live[0].id) || (results[0] && results[0].id) ||
+    (upcoming[0] && upcoming[0].id) || (final[0] && final[0].id) || null;
+  return { list: final, defaultId };
 }
 
 // Which source is currently the authoritative one across a merged list.
