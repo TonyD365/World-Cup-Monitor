@@ -88,6 +88,7 @@ export function mockDetail(match) {
       { label: 'Corners', home: 4, away: 3 },
       { label: 'Fouls', home: 8, away: 11 },
     ],
+    ball: { x: 0.46, y: 0.4, x2: 0.62, y2: 0.55, text: `Pass at ${match.minute || 1}'`, min: match.minute || 1 },
     plays: {
       lastPlay: { x: 0.46, y: 0.4, x2: 0.62, y2: 0.55, type: 'Attempted tackle', text: `Attempted tackle at ${match.minute || 1}'`, min: match.minute || 1, team: match.home.abbr },
       shots: [

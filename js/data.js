@@ -6,7 +6,7 @@
 //   2. If everything is empty/unreachable, fall back to mock DEMO data.
 import { CONFIG } from './config.js';
 import { mergeMatches, effectiveAuthority } from '../shared/core.js';
-import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchEspnPlays, fetchOpenfootballStandings } from '../shared/sources.js';
+import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchEspnPlays, fetchEspnSituation, fetchOpenfootballStandings } from '../shared/sources.js';
 import { mockMatches, mockDetail } from '../shared/mock.js';
 
 // Resolve a real player photo by name via TheSportsDB (free key, CORS-ok) when
@@ -103,12 +103,14 @@ export async function loadDetail(match) {
   if (match.sources.includes('mock')) return mockDetail(match);
   const eid = match.espnId || (/^\d+$/.test(String(match.id)) ? String(match.id) : null);
   if (!eid) return null;
-  const [detail, plays] = await Promise.all([
+  const [detail, plays, ball] = await Promise.all([
     fetchEspnSummary(fetch, eid).catch(() => null),
-    cachedPlays(eid), // ball position + shot map (may be CORS-blocked)
+    cachedPlays(eid), // shot map (cached; may be CORS-blocked)
+    fetchEspnSituation(fetch, eid).catch(() => null), // current ball — always latest
   ]);
-  if (!detail && !plays) return null;
+  if (!detail && !plays && !ball) return null;
   const out = detail || { events: [], lineups: [], stats: [], table: [] };
   out.plays = plays;
+  out.ball = ball;
   return out;
 }

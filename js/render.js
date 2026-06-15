@@ -200,19 +200,8 @@ export function renderEventLog(m, shownKeys, detail) {
     const n = numByName.get(norm(name));
     return n != null && n !== '' ? `${n} ${name}` : name;
   };
-  // Sort by minute; within a minute, phase markers (Half/Full Time) come last
-  // so HALF TIME sits after that minute's stoppage events.
-  const evs = (m.events || [])
-    .map((e, i) => ({ e, i }))
-    .sort((A, B) => {
-      const d = (A.e.min || 0) - (B.e.min || 0);
-      if (d) return d;
-      const pa = A.e.type === 'half' ? 1 : 0;
-      const pb = B.e.type === 'half' ? 1 : 0;
-      if (pa !== pb) return pa - pb;
-      return A.i - B.i;
-    })
-    .map((x) => x.e);
+  // Already in chronological order from the source adapter — render as-is.
+  const evs = m.events || [];
   let appended = false;
   for (const ev of evs) {
     // De-dupe goals to one line per minute+team (a goal can arrive from both
@@ -471,8 +460,8 @@ export function renderBallField(detail, m) {
   const v = el('ball-field');
   const panel = el('ball-panel');
   if (!v) return;
-  const plays = detail && detail.plays;
-  const lp = plays && plays.lastPlay;
+  // Prefer the live `situation` last play (always latest); fall back to plays.
+  const lp = (detail && detail.ball) || (detail && detail.plays && detail.plays.lastPlay);
   const live = m && m.status === 'live';
   if (!live || !lp || lp.x == null || lp.y == null) {
     if (v.innerHTML) v.innerHTML = '';
@@ -509,22 +498,30 @@ function shotPlayer(text) {
   return text.split(/[.,]/)[0].trim().slice(0, 28);
 }
 
-// 2D goal-front view with an approximate placement marker (no zone data, so the
-// position is inferred from the result; labelled "approx").
-function goalFrontSvg(result) {
-  const inside = result === 'goal' || result === 'save';
-  const pos = result === 'goal' ? { x: 30, y: 17 }
-    : result === 'save' ? { x: 21, y: 15 }
-      : result === 'block' ? { x: 30, y: 25 }
-        : { x: 52, y: 12 }; // miss → outside, top-right
+// 2D goal-front view. Horizontal placement is approximated from the shot's
+// lateral pitch position; vertical (high/low) isn't in the free feed, so it's
+// inferred from the result. Off-target shots are drawn outside the frame.
+function goalFrontSvg(s) {
+  const result = s.result;
+  const lat = (s.y != null ? s.y : 0.5) - 0.5; // -0.5..0.5 across the pitch width
+  let gx = 30 + lat * 46; // map to goal mouth (12..48), can spill outside for misses
+  let gy;
+  if (result === 'goal') gy = 16;
+  else if (result === 'save') gy = 15;
+  else if (result === 'block') gy = 24;
+  else { // miss: wide of a post, or over the bar
+    if (Math.abs(lat) > 0.16) { gx = lat < 0 ? 7 : 53; gy = 13; }
+    else { gy = 3; gx = 30 + lat * 30; }
+  }
+  gx = Math.max(3, Math.min(57, gx));
   const cls = result === 'goal' ? 'shot-goal' : result === 'save' ? 'shot-save' : result === 'block' ? 'shot-block' : 'shot-miss';
   return `<svg class="goal-svg" viewBox="0 0 60 34" preserveAspectRatio="xMidYMid meet">
     <g class="goal-net">${Array.from({ length: 7 }, (_, i) => `<line x1="${13 + i * 5.6}" y1="6" x2="${13 + i * 5.6}" y2="29"/>`).join('')}
       ${Array.from({ length: 4 }, (_, i) => `<line x1="12" y1="${9 + i * 5.5}" x2="48" y2="${9 + i * 5.5}"/>`).join('')}</g>
     <path d="M12 29 L12 6 L48 6 L48 29" class="goal-frame"/>
     <line x1="2" y1="29" x2="58" y2="29" class="goal-ground"/>
-    <circle cx="${pos.x}" cy="${pos.y}" r="2.4" class="${cls} goal-mark"/>
-    ${inside ? '' : `<text x="30" y="33" class="goal-note">approx</text>`}
+    <circle cx="${gx.toFixed(1)}" cy="${gy}" r="2.4" class="${cls} goal-mark"/>
+    <text x="30" y="33" class="goal-note">approx</text>
   </svg>`;
 }
 
@@ -569,7 +566,7 @@ export function renderShotMap(detail, filter, sel) {
     card = `<div class="shot-card">
       <div class="sc-left">
         <div class="sc-res-badge ${st.cls}">${st.label}</div>
-        ${goalFrontSvg(s.result)}
+        ${goalFrontSvg(s)}
         <div class="sc-count" translate="no">${pos + 1} of ${idxs.length}</div>
       </div>
       <div class="sc-right">

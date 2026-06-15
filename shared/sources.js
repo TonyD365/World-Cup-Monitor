@@ -273,29 +273,82 @@ export async function fetchEspnPlays(fetchImpl, eventId) {
     else if (/saved/.test(t)) result = 'save';
     else if (/block/.test(t)) result = 'block';
     else result = 'miss';
-    // Teams switch ends at halftime; normalize 2nd-half shots (180° rotation)
-    // so each team's shots cluster at one goal (like ESPN's shot map).
-    let sx = p.x;
-    let sy = p.y;
-    if (p.min != null && p.min > 45) { sx = 1 - sx; sy = 1 - sy; }
-    shots.push({ x: sx, y: sy, result, min: p.min, team: p.team, text: p.text });
+    shots.push({ x: p.x, y: p.y, result, min: p.min, team: p.team, text: p.text });
+  }
+
+  // ESPN's coordinates are relative to the attacking direction (always toward
+  // x=1), so both teams' shots pile up at the same goal. Mirror one team to the
+  // opposite end so the two teams' shots split left/right like ESPN's map.
+  const teams = [...new Set(shots.map((s) => s.team).filter(Boolean))];
+  const mirror = teams.length > 1 ? teams[1] : null;
+  if (mirror) {
+    for (const s of shots) {
+      if (s.team === mirror) { s.x = 1 - s.x; s.y = 1 - s.y; }
+    }
   }
   return { lastPlay, shots };
+}
+
+// Fractional minute including stoppage, e.g. "45'+2'" -> 45.02, "67'" -> 67.
+function clockFrac(c) {
+  if (!c) return null;
+  const dv = typeof c === 'object' ? c.displayValue : c;
+  const mm = /(\d+)\s*'?(?:\s*\+\s*(\d+))?/.exec(String(dv || ''));
+  if (!mm) return null;
+  return parseInt(mm[1], 10) + (mm[2] ? parseInt(mm[2], 10) / 100 : 0);
+}
+
+// Chronological sort position. Period boundaries get synthetic minutes so they
+// land correctly: kick off=0, end-of-1st/half-time=45.99, 2nd-half start=46,
+// full time=last.
+function eventSortPos(ev) {
+  if (ev.type === 'half') {
+    const d = (ev.detail || '').toLowerCase();
+    if (/kick[\s-]?off/.test(d)) return ev.minF != null && ev.minF > 1 ? ev.minF : 0;
+    if (/second half (begins|start)|start of (the )?second half/.test(d)) return 46;
+    if (/full[\s-]?time|match ended|second half ends|end of (the )?(2nd|second) half/.test(d)) return 1000;
+    return 45.99; // half time / first half ends / end of first half
+  }
+  return ev.minF != null ? ev.minF : (ev.min != null ? ev.min : 0);
+}
+
+// Current ball / last play from ESPN's lightweight `situation` endpoint — always
+// the latest, unlike the paginated plays list. Returns { x, y, x2, y2, text, min }.
+export async function fetchEspnSituation(fetchImpl, eventId) {
+  const url = `https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world/events/${eventId}/competitions/${eventId}/situation?lang=en`;
+  const data = await getJSON(fetchImpl, url);
+  if (!data) return null;
+  let lp = data.lastPlay || data;
+  // lastPlay is often a $ref to the play object.
+  if (lp && lp.$ref && lp.fieldPositionX == null) {
+    const d2 = await getJSON(fetchImpl, String(lp.$ref).replace(/^http:/, 'https:'));
+    if (d2) lp = d2;
+  }
+  if (!lp) return null;
+  const num = (v) => (typeof v === 'number' ? v : v != null && !isNaN(parseFloat(v)) ? parseFloat(v) : null);
+  const x = num(lp.fieldPositionX);
+  const y = num(lp.fieldPositionY);
+  if (x == null || y == null) return null;
+  return {
+    x, y, x2: num(lp.fieldPosition2X), y2: num(lp.fieldPosition2Y),
+    text: lp.text || (lp.type && lp.type.text) || '',
+    min: (lp.clock && parseInt(lp.clock.displayValue, 10)) || null,
+  };
 }
 
 function parseEspnEvents(data) {
   const sides = teamSides(data);
   const out = [];
   const seen = new Set();
-  const add = (min, typeTxt, teamId, player, detail, assist = '') => {
+  const add = (clock, typeTxt, teamId, player, detail, assist = '') => {
     let type = espnEventType(typeTxt || detail || '');
-    // Drinks/cooling break shows up only in the commentary text.
     if (/drinks? break|cooling break|hydration break/i.test(`${typeTxt || ''} ${detail || ''}`)) type = 'break';
+    const min = clockToMin(clock);
     const key = `${min}|${type}|${player}|${(detail || '').slice(0, 40)}`;
     if (seen.has(key)) return;
     seen.add(key);
     out.push({
-      min, type, team: teamLabel(sides, teamId), player, assist,
+      min, minF: clockFrac(clock), type, team: teamLabel(sides, teamId), player, assist,
       detail: detail || typeTxt || '', source: 'espn',
     });
   };
@@ -305,15 +358,13 @@ function parseEspnEvents(data) {
     try {
       const parts = k.participants || [];
       const player = (parts[0] && parts[0].athlete && parts[0].athlete.displayName) || '';
-      // For goals, the 2nd participant is typically the assist provider; for
-      // substitutions it's the player coming on.
       const assist = (parts[1] && parts[1].athlete && parts[1].athlete.displayName) || '';
       let typeTxt = (k.type && k.type.text) || '';
       if (k.scoringPlay || k.ownGoal) typeTxt = 'goal';
       else if (k.redCard) typeTxt = 'red card';
       else if (k.yellowCard) typeTxt = 'yellow card';
       else if (k.substitution) typeTxt = 'substitution';
-      add(clockToMin(k.clock), typeTxt, k.team && k.team.id, player, k.text || (k.type && k.type.text) || '', assist);
+      add(k.clock, typeTxt, k.team && k.team.id, player, k.text || (k.type && k.type.text) || '', assist);
     } catch (_) {
       /* skip */
     }
@@ -325,13 +376,17 @@ function parseEspnEvents(data) {
       const play = c.play || {};
       const typeTxt = (play.type && play.type.text) || c.text || '';
       const teamId = (play.team && play.team.id) || '';
-      add(clockToMin(c.time || play.clock), typeTxt, teamId, '', c.text || (play.type && play.type.text) || '');
+      add(c.time || play.clock, typeTxt, teamId, '', c.text || (play.type && play.type.text) || '');
     } catch (_) {
       /* skip */
     }
   }
 
-  out.sort((a, b) => (a.min || 0) - (b.min || 0));
+  out
+    .map((e, i) => ({ e, i }))
+    .sort((A, B) => (eventSortPos(A.e) - eventSortPos(B.e)) || (A.i - B.i))
+    .forEach((x, i) => { x.e._ord = i; });
+  out.sort((a, b) => a._ord - b._ord);
   return out;
 }
 
