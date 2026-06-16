@@ -170,19 +170,18 @@ function playBeep() {
   const c = state.audioCtx;
   if (!c) return;
   const now = c.currentTime;
-  // Three rising notes, louder, so a goal is clearly audible.
-  [620, 820, 1040].forEach((f, i) => {
-    const t = i * 0.16;
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = 'square';
-    o.frequency.value = f;
-    o.connect(g); g.connect(c.destination);
-    g.gain.setValueAtTime(0.0001, now + t);
-    g.gain.exponentialRampToValueAtTime(0.5, now + t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.15);
-    o.start(now + t); o.stop(now + t + 0.16);
-  });
+  const dur = 0.55; // one clear sustained "beeep"
+  const o = c.createOscillator();
+  const g = c.createGain();
+  o.type = 'sine';
+  o.frequency.value = 880;
+  o.connect(g); g.connect(c.destination);
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(0.5, now + 0.02); // quick attack
+  g.gain.setValueAtTime(0.5, now + dur - 0.08); // hold
+  g.gain.exponentialRampToValueAtTime(0.0001, now + dur); // gentle release
+  o.start(now);
+  o.stop(now + dur + 0.02);
 }
 
 // iOS suspends the AudioContext when idle/backgrounded, so resume FIRST and play
