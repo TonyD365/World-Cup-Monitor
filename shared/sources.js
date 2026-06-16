@@ -174,10 +174,36 @@ export async function fetchEspnSummary(fetchImpl, eventId) {
     lineups: parseEspnLineups(data),
     stats: parseEspnStats(data),
     table: parseEspnTable(data),
-    predictor: parseEspnPredictor(data),
+    predictor: parseEspnPredictor(data) || parseEspnPickcenter(data),
     info: parseEspnInfo(data),
     live: parseEspnLive(data),
   };
+}
+
+// Win probability implied by ESPN betting odds (summary.pickcenter). Converts
+// moneyline odds to probabilities and removes the vig. Returns {home,draw,away}.
+function parseEspnPickcenter(data) {
+  const pc = data.pickcenter || data.pickCenter;
+  if (!Array.isArray(pc) || !pc.length) return null;
+  const ml = (o) => {
+    if (!o) return null;
+    const v = o.moneyLine != null ? o.moneyLine : (o.moneyline != null ? o.moneyline : o.value);
+    const n = Number(v);
+    return isFinite(n) && n !== 0 ? n : null;
+  };
+  const toProb = (n) => (n == null ? null : n > 0 ? 100 / (n + 100) : -n / (-n + 100));
+  for (const o of pc) {
+    const ph = toProb(ml(o.homeTeamOdds));
+    const pa = toProb(ml(o.awayTeamOdds));
+    const pd = toProb(ml(o.drawOdds));
+    if (ph != null && pa != null) {
+      const tot = ph + pa + (pd || 0);
+      const home = Math.round((ph / tot) * 100);
+      const away = Math.round((pa / tot) * 100);
+      return { home, away, draw: Math.max(0, 100 - home - away) };
+    }
+  }
+  return null;
 }
 
 // Authoritative live status/score/clock for this match from the summary header
