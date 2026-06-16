@@ -6,7 +6,7 @@
 //   2. If everything is empty/unreachable, fall back to mock DEMO data.
 import { CONFIG } from './config.js';
 import { mergeMatches, effectiveAuthority } from '../shared/core.js';
-import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchOpenfootballStandings, fetchOpenfootballBracket } from '../shared/sources.js';
+import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchEspnPredictor, fetchOpenfootballStandings, fetchOpenfootballBracket } from '../shared/sources.js';
 import { mockMatches, mockDetail } from '../shared/mock.js';
 
 // Resolve a real player photo by name via TheSportsDB (free key, CORS-ok) when
@@ -103,5 +103,22 @@ export async function loadDetail(match) {
   if (match.sources.includes('mock')) return mockDetail(match);
   const eid = match.espnId || (/^\d+$/.test(String(match.id)) ? String(match.id) : null);
   if (!eid) return null;
-  return (await fetchEspnSummary(fetch, eid).catch(() => null)) || null;
+  const [detail, pred] = await Promise.all([
+    fetchEspnSummary(fetch, eid).catch(() => null),
+    cachedPredictor(eid), // real win probability (ESPN core predictor)
+  ]);
+  if (!detail) return null;
+  if (pred) detail.predictor = pred; // prefer the dedicated predictor endpoint
+  return detail;
+}
+
+// Win probability cached briefly (changes slowly).
+const _predCache = new Map(); // eid -> { at, data }
+async function cachedPredictor(eid) {
+  const now = Date.now();
+  const c = _predCache.get(eid);
+  if (c && now - c.at < 20000) return c.data;
+  const d = await fetchEspnPredictor(fetch, eid).catch(() => null);
+  _predCache.set(eid, { at: now, data: d });
+  return d;
 }

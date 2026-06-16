@@ -352,6 +352,25 @@ export async function fetchEspnSituation(fetchImpl, eventId) {
   };
 }
 
+// Real win probability from ESPN's core `predictor` endpoint (no key). Returns
+// { home, draw, away } as integer percentages, or null if not available.
+export async function fetchEspnPredictor(fetchImpl, eventId) {
+  const url = `https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world/events/${eventId}/competitions/${eventId}/predictor?lang=en`;
+  const data = await getJSON(fetchImpl, url);
+  if (!data) return null;
+  const num = (v) => (typeof v === 'number' ? v : v != null && !isNaN(parseFloat(v)) ? parseFloat(v) : null);
+  const h = data.homeTeam || {};
+  const a = data.awayTeam || {};
+  const home = num(h.gameProjection);
+  const away = num(a.gameProjection);
+  if (home == null || away == null) return null;
+  const tie = num(h.teamChanceTie) != null ? num(h.teamChanceTie)
+    : num(a.teamChanceTie) != null ? num(a.teamChanceTie) : null;
+  const hr = Math.round(home);
+  const ar = Math.round(away);
+  return { home: hr, away: ar, draw: tie != null ? Math.round(tie) : Math.max(0, 100 - hr - ar) };
+}
+
 function parseEspnEvents(data) {
   const sides = teamSides(data);
   const out = [];

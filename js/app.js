@@ -97,7 +97,9 @@ function clockText(m) {
       state.clockAnchor = { id: m.id, minute, at: Date.now() };
     }
     const secs = Math.min(59, Math.floor((Date.now() - state.clockAnchor.at) / 1000));
-    total = minute * 60 + secs;
+    // ESPN's minute is 1-based ("1'" during the first minute = 0:xx elapsed), so
+    // show (minute-1):SS — kickoff starts at 00:00, 2nd half ("46'") at 45:00.
+    total = Math.max(0, minute - 1) * 60 + secs;
   }
   const mm = String(Math.floor(total / 60)).padStart(2, '0');
   const ss = String(total % 60).padStart(2, '0');
