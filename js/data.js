@@ -9,11 +9,44 @@ import { mergeMatches, effectiveAuthority } from '../shared/core.js';
 import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchEspnPredictor, fetchOpenfootballStandings, fetchOpenfootballBracket } from '../shared/sources.js';
 import { mockMatches, mockDetail } from '../shared/mock.js';
 
-// Resolve a real player photo by name via TheSportsDB (free key, CORS-ok) when
-// ESPN has no headshot. Cached per session; '' means "looked up, none found".
+// Resolve a real player photo by name, trying several keyless, CORS-friendly
+// sources in turn. Cached per session ('' = looked up, none found).
 const _photoCache = new Map();
 const _photoPending = new Map();
 const _pnorm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+
+// 1) TheSportsDB (free key 123) — soccer player cutouts/thumbs.
+async function photoFromSportsDB(name) {
+  try {
+    const res = await fetch(`https://www.thesportsdb.com/api/v1/json/123/searchplayers.php?p=${encodeURIComponent(name)}`);
+    if (res.ok) {
+      const j = await res.json();
+      const pl = j && Array.isArray(j.player) && j.player[0];
+      if (pl) return pl.strCutout || pl.strThumb || '';
+    }
+  } catch (_) { /* ignore */ }
+  return '';
+}
+
+// 2) Wikipedia page image (action API with origin=* for CORS). Broad coverage.
+async function photoFromWikipedia(name) {
+  for (const q of [`${name} (footballer)`, name]) {
+    try {
+      const u = `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=pageimages&piprop=thumbnail&pithumbsize=200&titles=${encodeURIComponent(q)}`;
+      const res = await fetch(u);
+      if (!res.ok) continue;
+      const j = await res.json();
+      const pages = j && j.query && j.query.pages;
+      if (pages) {
+        for (const id of Object.keys(pages)) {
+          const th = pages[id] && pages[id].thumbnail && pages[id].thumbnail.source;
+          if (th) return th;
+        }
+      }
+    } catch (_) { /* ignore */ }
+  }
+  return '';
+}
 
 export async function resolvePlayerPhoto(name) {
   const k = _pnorm(name);
@@ -21,15 +54,8 @@ export async function resolvePlayerPhoto(name) {
   if (_photoCache.has(k)) return _photoCache.get(k);
   if (_photoPending.has(k)) return _photoPending.get(k);
   const p = (async () => {
-    let url = '';
-    try {
-      const res = await fetch(`https://www.thesportsdb.com/api/v1/json/123/searchplayers.php?p=${encodeURIComponent(name)}`);
-      if (res.ok) {
-        const j = await res.json();
-        const pl = j && Array.isArray(j.player) && j.player[0];
-        if (pl) url = pl.strCutout || pl.strThumb || '';
-      }
-    } catch (_) { /* CORS/network — fall back to avatar */ }
+    let url = await photoFromSportsDB(name);
+    if (!url) url = await photoFromWikipedia(name);
     _photoCache.set(k, url);
     _photoPending.delete(k);
     return url;
