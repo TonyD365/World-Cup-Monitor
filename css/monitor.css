@@ -502,16 +502,20 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 .sc-count { color: var(--green-dim); font-size: 10px; margin-top: 4px; }
 @media (max-width: 520px) { .shot-card { flex-direction: column; align-items: center; } .sc-left { width: 160px; } }
 
-/* Knockout bracket */
+/* Knockout bracket — tree / mind-map */
 #bracket { overflow-x: auto; }
-.bracket-cols { display: flex; gap: 14px; min-width: min-content; padding-bottom: 6px; }
-.bk-col { flex: 0 0 auto; min-width: 150px; }
-.bk-round { color: var(--green-dim); font-size: 11px; letter-spacing: 1px; text-align: center; margin-bottom: 8px; text-transform: uppercase; }
-.bk-tie { border: 1px solid var(--green-dim); margin-bottom: 10px; }
-.bk-row { display: flex; justify-content: space-between; padding: 4px 8px; font-size: 12px; color: var(--green-soft); }
+.bracket-map { position: relative; min-width: min-content; }
+.bk-heads { position: absolute; top: 0; left: 0; }
+.bk-round-h { position: absolute; top: 2px; color: var(--green-dim); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+.bk-conns { position: absolute; left: 0; pointer-events: none; }
+.bk-conn { fill: none; stroke: var(--green-dim); stroke-width: 1; opacity: 0.55; }
+.bk-nodes { position: absolute; left: 0; top: 0; }
+.bk-node { position: absolute; border: 1px solid var(--green-dim); background: var(--panel); box-sizing: border-box; overflow: hidden; }
+.bk-row { display: flex; justify-content: space-between; gap: 6px; padding: 1px 6px; font-size: 11px; color: var(--green-soft); height: 50%; align-items: center; }
 .bk-row + .bk-row { border-top: 1px solid rgba(47, 181, 106, 0.3); }
 .bk-row.bk-win { color: var(--green); font-weight: bold; }
-.bk-sc { color: var(--amber); }
+.bk-team { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bk-sc { color: var(--amber); flex: 0 0 auto; }
 
 /* Standings table */
 .sg { margin-bottom: 16px; }

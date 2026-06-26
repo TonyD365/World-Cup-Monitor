@@ -631,24 +631,63 @@ export function renderShotMap(detail, filter, sel) {
 }
 
 // Knockout bracket: one column per round, each a list of ties.
+// Knockout bracket as a tree/mind-map: one column per round, each next-round
+// node vertically centered between its two feeders, with elbow connectors.
 export function renderBracket(bracket) {
   const v = el('bracket');
   const panel = el('bracket-panel');
   if (!v) return;
-  const rounds = (bracket || []).filter((r) => r.matches && r.matches.length);
+  const rounds = (bracket || []).filter((r) => r.matches && r.matches.length && !/third/i.test(r.name));
   if (!rounds.length) { if (panel) panel.hidden = true; sig.bracket = ''; return; }
-  const tie = (t) => {
+
+  const BOXH = 36, VGAP = 12, COLW = 180, UNIT = BOXH + VGAP, PADT = 4, HEADH = 22;
+  // y-position of every node: round 0 evenly spaced; later rounds centered on feeders.
+  const ys = [];
+  rounds.forEach((r, ri) => {
+    ys[ri] = r.matches.map((_, j) => {
+      if (ri === 0) return PADT + j * UNIT;
+      const prev = ys[ri - 1];
+      const a = prev[2 * j];
+      const b = prev[2 * j + 1];
+      if (a != null && b != null) return (a + b) / 2;
+      return a != null ? a : (b != null ? b : PADT + j * UNIT);
+    });
+  });
+  const totalH = rounds[0].matches.length * UNIT + PADT + 8;
+  const totalW = rounds.length * COLW;
+
+  let conns = '';
+  for (let ri = 1; ri < rounds.length; ri++) {
+    rounds[ri].matches.forEach((_, j) => {
+      const tx = ri * COLW + 4;
+      const ty = ys[ri][j] + BOXH / 2;
+      [2 * j, 2 * j + 1].forEach((fi) => {
+        if (!rounds[ri - 1].matches[fi]) return;
+        const fx = (ri - 1) * COLW + (COLW - 16);
+        const fy = ys[ri - 1][fi] + BOXH / 2;
+        const mx = (fx + tx) / 2;
+        conns += `<path d="M${fx} ${fy} H${mx} V${ty} H${tx}" class="bk-conn"/>`;
+      });
+    });
+  }
+
+  const node = (t, ri, j) => {
     const sc = t.s1 != null && t.s2 != null;
     const w1 = sc && t.s1 > t.s2;
     const w2 = sc && t.s2 > t.s1;
-    return `<div class="bk-tie">
+    return `<div class="bk-node" style="left:${ri * COLW + 4}px;top:${ys[ri][j]}px;width:${COLW - 20}px;height:${BOXH}px">
       <div class="bk-row ${w1 ? 'bk-win' : ''}"><span class="bk-team">${esc(t.team1)}</span><span class="bk-sc">${t.s1 != null ? t.s1 : ''}</span></div>
       <div class="bk-row ${w2 ? 'bk-win' : ''}"><span class="bk-team">${esc(t.team2)}</span><span class="bk-sc">${t.s2 != null ? t.s2 : ''}</span></div>
     </div>`;
   };
-  const html = `<div class="bracket-cols">${rounds
-    .map((r) => `<div class="bk-col"><div class="bk-round">${esc(r.name)}</div>${r.matches.map(tie).join('')}</div>`)
-    .join('')}</div>`;
+  const boxes = rounds.map((r, ri) => r.matches.map((t, j) => node(t, ri, j)).join('')).join('');
+  const heads = rounds.map((r, ri) => `<div class="bk-round-h" style="left:${ri * COLW + 4}px">${esc(r.name)}</div>`).join('');
+
+  const html = `<div class="bracket-map" style="width:${totalW}px;height:${totalH + HEADH}px">
+    <div class="bk-heads" style="height:${HEADH}px">${heads}</div>
+    <svg class="bk-conns" width="${totalW}" height="${totalH}" style="top:${HEADH}px"><g>${conns}</g></svg>
+    <div class="bk-nodes" style="top:${HEADH}px">${boxes}</div>
+  </div>`;
   if (sig.bracket !== html) { v.innerHTML = html; sig.bracket = html; }
   if (panel) panel.hidden = false;
 }
