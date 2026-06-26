@@ -671,22 +671,42 @@ export function renderBracket(bracket) {
     });
   }
 
-  const node = (t, ri, j) => {
+  const nodeAt = (t, left, top, cls = '') => {
     const sc = t.s1 != null && t.s2 != null;
     const w1 = sc && t.s1 > t.s2;
     const w2 = sc && t.s2 > t.s1;
-    return `<div class="bk-node" style="left:${ri * COLW + 4}px;top:${ys[ri][j]}px;width:${COLW - 20}px;height:${BOXH}px">
+    return `<div class="bk-node ${cls}" style="left:${left}px;top:${top}px;width:${COLW - 20}px;height:${BOXH}px">
       <div class="bk-row ${w1 ? 'bk-win' : ''}"><span class="bk-team">${esc(t.team1)}</span><span class="bk-sc">${t.s1 != null ? t.s1 : ''}</span></div>
       <div class="bk-row ${w2 ? 'bk-win' : ''}"><span class="bk-team">${esc(t.team2)}</span><span class="bk-sc">${t.s2 != null ? t.s2 : ''}</span></div>
     </div>`;
   };
-  const boxes = rounds.map((r, ri) => r.matches.map((t, j) => node(t, ri, j)).join('')).join('');
+  let boxes = rounds.map((r, ri) => r.matches.map((t, j) => nodeAt(t, ri * COLW + 4, ys[ri][j])).join('')).join('');
   const heads = rounds.map((r, ri) => `<div class="bk-round-h" style="left:${ri * COLW + 4}px">${esc(r.name)}</div>`).join('');
 
-  const html = `<div class="bracket-map" style="width:${totalW}px;height:${totalH + HEADH}px">
+  // Third-place match: put it in the Final's column, below the Final, fed by the
+  // two losing semi-finalists (dashed connectors).
+  let extraHeads = '';
+  let h = totalH;
+  const third = (bracket || []).find((r) => /third/i.test(r.name) && r.matches && r.matches.length);
+  const lastRi = rounds.length - 1;
+  if (third && lastRi >= 1) {
+    const left = lastRi * COLW + 4;
+    const ty = ys[lastRi][0] + BOXH + 60;
+    boxes += nodeAt(third.matches[0], left, ty, 'bk-third');
+    extraHeads = `<div class="bk-round-h bk-third-h" style="left:${left}px;top:${ty - 16}px">3RD PLACE</div>`;
+    (ys[lastRi - 1] || []).forEach((sy) => {
+      const fx = (lastRi - 1) * COLW + (COLW - 16);
+      const fy = sy + BOXH / 2;
+      const mx = (fx + left) / 2;
+      conns += `<path d="M${fx} ${fy} H${mx} V${ty + BOXH / 2} H${left}" class="bk-conn bk-conn-3"/>`;
+    });
+    h = Math.max(h, ty + BOXH + 12);
+  }
+
+  const html = `<div class="bracket-map" style="width:${totalW}px;height:${h + HEADH}px">
     <div class="bk-heads" style="height:${HEADH}px">${heads}</div>
-    <svg class="bk-conns" width="${totalW}" height="${totalH}" style="top:${HEADH}px"><g>${conns}</g></svg>
-    <div class="bk-nodes" style="top:${HEADH}px">${boxes}</div>
+    <svg class="bk-conns" width="${totalW}" height="${h}" style="top:${HEADH}px"><g>${conns}</g></svg>
+    <div class="bk-nodes" style="top:${HEADH}px">${boxes}${extraHeads}</div>
   </div>`;
   if (sig.bracket !== html) { v.innerHTML = html; sig.bracket = html; }
   if (panel) panel.hidden = false;

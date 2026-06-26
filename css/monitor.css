@@ -509,6 +509,9 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 .bk-round-h { position: absolute; top: 2px; color: var(--green-dim); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
 .bk-conns { position: absolute; left: 0; pointer-events: none; }
 .bk-conn { fill: none; stroke: var(--green-dim); stroke-width: 1; opacity: 0.55; }
+.bk-conn-3 { stroke-dasharray: 3 3; opacity: 0.35; }
+.bk-third { border-color: var(--amber); }
+.bk-third-h { color: var(--amber) !important; }
 .bk-nodes { position: absolute; left: 0; top: 0; }
 .bk-node { position: absolute; border: 1px solid var(--green-dim); background: var(--panel); box-sizing: border-box; overflow: hidden; }
 .bk-row { display: flex; justify-content: space-between; gap: 6px; padding: 1px 6px; font-size: 11px; color: var(--green-soft); height: 50%; align-items: center; }
