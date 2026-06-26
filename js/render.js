@@ -453,7 +453,7 @@ export function renderTable(detail, m) {
         <thead><tr><th class="r">#</th><th class="l">TEAM</th><th>MP</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>PTS</th></tr></thead>
         <tbody>${g.rows
           .map(
-            (r) => `<tr class="${names.includes(r.team) ? 'hl' : ''}">
+            (r) => `<tr class="${names.includes(r.team) ? 'hl' : ''} ${Number(r.rank) <= 2 ? 'q-direct' : Number(r.rank) === 3 ? 'q-third' : ''}">
             <td class="r" translate="no">${esc(r.rank)}</td>
             <td class="l" translate="no">${esc(r.abbr || r.team)}</td>
             ${td(r.mp)}${td(r.w)}${td(r.d)}${td(r.l)}${td(r.gf)}${td(r.ga)}${td(r.gd)}<td class="pts" translate="no">${esc(r.pts)}</td></tr>`
