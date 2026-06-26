@@ -32,6 +32,7 @@ const state = {
   pollTimer: null,
   pollInterval: CONFIG.POLL_INTERVAL,
   favorites: loadFavorites(), // Set of normalized team names
+  bestThirds: null, // Set of normalized names of the 8 best third-placed teams
   prevScores: new Map(), // matchId -> {total,h,a} for goal detection (all matches)
   prevSel: null, // {id,h,a} for flip animation on the selected scoreboard
   alertsOn: false,
@@ -132,6 +133,22 @@ function groupsForMatch(groups, m) {
   if (homeG) return [homeG]; // away name mismatched across sources; both share home's group
   if (awayG) return [awayG];
   return [];
+}
+
+// The expanded 2026 format takes the top two of each group plus the eight best
+// third-placed teams. Collect every group's rank-3 row, rank them by points,
+// goal difference, then goals for, and return the top eight as a normalized-name
+// Set so the table can mark exactly those rows (and no other thirds).
+function computeBestThirds(groups, n = 8) {
+  const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+  const thirds = [];
+  for (const g of groups || []) {
+    const row = (g.rows || []).find((r) => Number(r.rank) === 3);
+    if (row) thirds.push(row);
+  }
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  thirds.sort((a, b) => num(b.pts) - num(a.pts) || num(b.gd) - num(a.gd) || num(b.gf) - num(a.gf));
+  return new Set(thirds.slice(0, n).map((r) => norm(r.team)));
 }
 
 // ---- goal alerts -----------------------------------------------------------
@@ -254,7 +271,7 @@ function renderActiveTab() {
   const m = selectedMatch();
   if (state.activeTab === 'lineups') { renderLineups(state.detail); upgradeLineupPhotos(); }
   else if (state.activeTab === 'stats') renderStats(state.detail);
-  else if (state.activeTab === 'table') renderTable(state.detail, m);
+  else if (state.activeTab === 'table') renderTable(state.detail, m, state.bestThirds);
 }
 
 // Upgrade players still showing an initials avatar to a real photo (TheSportsDB).
@@ -332,7 +349,10 @@ async function poll() {
       // computed from openfootball results, filtered to this match's group.
       if (!detail.table || !detail.table.length) {
         const groups = await loadStandings().catch(() => []);
-        if (groups.length) detail.table = groupsForMatch(groups, m);
+        if (groups.length) {
+          detail.table = groupsForMatch(groups, m);
+          state.bestThirds = computeBestThirds(groups, 8);
+        }
       }
       state.detail = detail;
     } else {

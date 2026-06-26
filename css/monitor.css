@@ -506,7 +506,7 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
 #bracket { overflow-x: auto; }
 .bracket-map { position: relative; min-width: min-content; }
 .bk-heads { position: absolute; top: 0; left: 0; }
-.bk-round-h { position: absolute; top: 2px; color: var(--green-dim); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+.bk-round-h { position: absolute; top: 2px; color: var(--green-dim); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
 .bk-conns { position: absolute; left: 0; pointer-events: none; }
 .bk-conn { fill: none; stroke: var(--green-dim); stroke-width: 1; opacity: 0.55; }
 .bk-conn-3 { stroke-dasharray: 3 3; opacity: 0.35; }

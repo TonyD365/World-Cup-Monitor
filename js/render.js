@@ -436,7 +436,7 @@ export function renderStats(detail) {
   }
 }
 
-export function renderTable(detail, m) {
+export function renderTable(detail, m, bestThirds) {
   const v = el('view-table');
   const groups = (detail && detail.table) || [];
   if (!groups.length) {
@@ -445,6 +445,14 @@ export function renderTable(detail, m) {
     return;
   }
   const names = m ? [m.home.name, m.away.name] : [];
+  // 2026: top 2 advance directly; a 3rd-placed team only advances if it's among
+  // the best 8 third-placed teams across all groups.
+  const qualClass = (r) => {
+    const rank = Number(r.rank);
+    if (rank <= 2) return 'q-direct';
+    if (rank === 3 && bestThirds && bestThirds.has(favKey(r.team))) return 'q-third';
+    return '';
+  };
   const td = (x) => `<td translate="no">${esc(x)}</td>`;
   const group = (g) => `
     <div class="sg">
@@ -453,7 +461,7 @@ export function renderTable(detail, m) {
         <thead><tr><th class="r">#</th><th class="l">TEAM</th><th>MP</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>PTS</th></tr></thead>
         <tbody>${g.rows
           .map(
-            (r) => `<tr class="${names.includes(r.team) ? 'hl' : ''} ${Number(r.rank) <= 2 ? 'q-direct' : Number(r.rank) === 3 ? 'q-third' : ''}">
+            (r) => `<tr class="${names.includes(r.team) ? 'hl' : ''} ${qualClass(r)}">
             <td class="r" translate="no">${esc(r.rank)}</td>
             <td class="l" translate="no">${esc(r.abbr || r.team)}</td>
             ${td(r.mp)}${td(r.w)}${td(r.d)}${td(r.l)}${td(r.gf)}${td(r.ga)}${td(r.gd)}<td class="pts" translate="no">${esc(r.pts)}</td></tr>`
@@ -693,7 +701,7 @@ export function renderBracket(bracket) {
     const left = lastRi * COLW + 4;
     const ty = ys[lastRi][0] + BOXH + 60;
     boxes += nodeAt(third.matches[0], left, ty, 'bk-third');
-    extraHeads = `<div class="bk-round-h bk-third-h" style="left:${left}px;top:${ty - 16}px">3RD PLACE</div>`;
+    extraHeads = `<div class="bk-round-h bk-third-h" style="left:${left}px;top:${ty - 18}px">3RD PLACE</div>`;
     (ys[lastRi - 1] || []).forEach((sy) => {
       const fx = (lastRi - 1) * COLW + (COLW - 16);
       const fy = sy + BOXH / 2;

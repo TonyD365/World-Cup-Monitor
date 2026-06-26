@@ -43,13 +43,24 @@ export function normalizeAbbr(s) {
   return (s || '').toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
 }
 
+// Build a stable, order-independent key from a team's full name so the same
+// nation lines up across sources that spell or order it differently
+// (ESPN "Congo DR" vs openfootball "DR Congo"). Strip accents/punctuation,
+// then sort the word tokens so word order no longer matters. Falls back to the
+// 3-letter abbreviation when no name is available.
+function teamKey(team) {
+  const name = (team && team.name ? team.name : '').toString();
+  const norm = name.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ');
+  const toks = norm.split(/\s+/).filter(Boolean).sort();
+  if (toks.length) return toks.join('');
+  return normalizeAbbr(team && team.abbr);
+}
+
 // Build a stable identity for a match so the same fixture from different
-// sources lines up: sorted team abbreviations + kickoff calendar day.
+// sources lines up: order-independent team-name keys + kickoff calendar day.
 export function matchIdentity(m) {
-  // Prefer the full team NAME (more consistent across sources) over the
-  // abbreviation, which differs per source (e.g. ESPN "CUW" vs FIFA "Curaçao").
-  const a = normalizeAbbr(m.home && m.home.name) || normalizeAbbr(m.home && m.home.abbr);
-  const b = normalizeAbbr(m.away && m.away.name) || normalizeAbbr(m.away && m.away.abbr);
+  const a = teamKey(m.home);
+  const b = teamKey(m.away);
   const teams = [a, b].sort().join('-');
   let day = '';
   if (m.kickoff) {
