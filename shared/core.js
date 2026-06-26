@@ -44,10 +44,9 @@ export function normalizeAbbr(s) {
 }
 
 // Build a stable, order-independent key from a team's full name so the same
-// nation lines up across sources that spell or order it differently
-// (ESPN "Congo DR" vs openfootball "DR Congo"). Strip accents/punctuation,
-// then sort the word tokens so word order no longer matters. Falls back to the
-// 3-letter abbreviation when no name is available.
+// fixture lines up across sources that order the words differently. Strip
+// accents/punctuation, then sort the word tokens. Falls back to the 3-letter
+// abbreviation when no name is available.
 function teamKey(team) {
   const name = (team && team.name ? team.name : '').toString();
   const norm = name.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ');

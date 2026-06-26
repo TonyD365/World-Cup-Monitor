@@ -6,7 +6,7 @@
 //   2. If everything is empty/unreachable, fall back to mock DEMO data.
 import { CONFIG } from './config.js';
 import { mergeMatches, effectiveAuthority } from '../shared/core.js';
-import { fetchEspn, fetchOpenfootball, fetchFifa, fetchEspnSummary, fetchEspnPredictor, fetchOpenfootballStandings, fetchOpenfootballBracket } from '../shared/sources.js';
+import { fetchEspn, fetchFifa, fetchEspnSummary, fetchEspnPredictor, fetchOpenfootballStandings, fetchOpenfootballBracket } from '../shared/sources.js';
 import { mockMatches, mockDetail } from '../shared/mock.js';
 
 // Resolve a real player photo by name, trying several keyless, CORS-friendly
@@ -68,9 +68,9 @@ let _standings = null;
 let _standingsAt = 0;
 export async function loadStandings() {
   const now = Date.now();
-  if (_standings && now - _standingsAt < 5 * 60 * 1000) return _standings;
+  if (_standings && now - _standingsAt < 5 * 60 * 1000) { health.openfootball = 'up'; return _standings; }
   const g = await fetchOpenfootballStandings(fetch).catch(() => null);
-  if (g && g.length) { _standings = g; _standingsAt = now; }
+  if (g && g.length) { _standings = g; _standingsAt = now; health.openfootball = 'up'; }
   return _standings || [];
 }
 
@@ -79,9 +79,9 @@ let _bracket = null;
 let _bracketAt = 0;
 export async function loadBracket() {
   const now = Date.now();
-  if (_bracket && now - _bracketAt < 5 * 60 * 1000) return _bracket;
+  if (_bracket && now - _bracketAt < 5 * 60 * 1000) { if (_bracket.length) health.openfootball = 'up'; return _bracket; }
   const b = await fetchOpenfootballBracket(fetch).catch(() => null);
-  if (b) { _bracket = b; _bracketAt = now; }
+  if (b) { _bracket = b; _bracketAt = now; if (b.length) health.openfootball = 'up'; }
   return _bracket || [];
 }
 
@@ -89,19 +89,22 @@ export async function loadBracket() {
 export const health = { fifa: 'down', espn: 'down', openfootball: 'down', mock: 'down' };
 
 async function tryDirect() {
-  const tasks = [fetchEspn(fetch).catch(() => []), fetchOpenfootball(fetch).catch(() => [])];
+  // ESPN is the sole live match source. openfootball is intentionally NOT
+  // merged into the timeline anymore — its team naming diverged from ESPN's
+  // (e.g. "DR Congo" vs "Congo DR") and produced duplicate cards. It is still
+  // used, separately, for the group standings and the knockout bracket
+  // (loadStandings / loadBracket), which drive its health LED.
+  const tasks = [fetchEspn(fetch).catch(() => [])];
   // FIFA official is CORS-blocked in the browser for most users; opt-in only.
   tasks.push(CONFIG.TRY_FIFA_DIRECT ? fetchFifa(fetch).catch(() => []) : Promise.resolve([]));
-  const [espn, of, fifa] = await Promise.all(tasks);
+  const [espn, fifa] = await Promise.all(tasks);
 
   health.espn = espn.length ? 'up' : 'down';
-  health.openfootball = of.length ? 'up' : 'down';
   health.fifa = fifa.length ? 'up' : 'down';
 
   const inputs = [
     { source: 'fifa', matches: fifa },
     { source: 'espn', matches: espn },
-    { source: 'openfootball', matches: of },
   ].filter((i) => i.matches.length);
   if (!inputs.length) return null;
   return mergeMatches(inputs);
