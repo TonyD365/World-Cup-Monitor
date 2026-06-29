@@ -645,39 +645,63 @@ export function renderBracket(bracket) {
   const v = el('bracket');
   const panel = el('bracket-panel');
   if (!v) return;
-  const rounds = (bracket || []).filter((r) => r.matches && r.matches.length && !/third/i.test(r.name));
-  if (!rounds.length) { if (panel) panel.hidden = true; sig.bracket = ''; return; }
+  const cols = (bracket || []).filter((r) => r.matches && r.matches.length && !/third/i.test(r.name));
+  if (!cols.length) { if (panel) panel.hidden = true; sig.bracket = ''; return; }
 
   const BOXH = 36, VGAP = 12, COLW = 180, UNIT = BOXH + VGAP, PADT = 4, HEADH = 22;
-  // y-position of every node: round 0 evenly spaced; later rounds centered on feeders.
-  const ys = [];
-  rounds.forEach((r, ri) => {
-    ys[ri] = r.matches.map((_, j) => {
-      if (ri === 0) return PADT + j * UNIT;
-      const prev = ys[ri - 1];
-      const a = prev[2 * j];
-      const b = prev[2 * j + 1];
-      if (a != null && b != null) return (a + b) / 2;
-      return a != null ? a : (b != null ? b : PADT + j * UNIT);
-    });
-  });
-  const totalH = rounds[0].matches.length * UNIT + PADT + 8;
-  const totalW = rounds.length * COLW;
 
-  let conns = '';
-  for (let ri = 1; ri < rounds.length; ri++) {
-    rounds[ri].matches.forEach((_, j) => {
-      const tx = ri * COLW + 4;
-      const ty = ys[ri][j] + BOXH / 2;
-      [2 * j, 2 * j + 1].forEach((fi) => {
-        if (!rounds[ri - 1].matches[fi]) return;
-        const fx = (ri - 1) * COLW + (COLW - 16);
-        const fy = ys[ri - 1][fi] + BOXH / 2;
-        const mx = (fx + tx) / 2;
-        conns += `<path d="M${fx} ${fy} H${mx} V${ty} H${tx}" class="bk-conn"/>`;
-      });
-    });
-  }
+  // Resolve a slot ("W74", "L101", or an already-decided team name) to the
+  // match number that feeds it. openfootball names feeders explicitly, so we
+  // must wire the tree by these references — NOT by array position, which is
+  // only loosely related to the real bracket order.
+  const findByName = (name, beforeRi) => {
+    for (let pri = beforeRi - 1; pri >= 0; pri--) {
+      const hit = cols[pri].matches.find((x) => x.team1 === name || x.team2 === name);
+      if (hit && hit.num != null) return hit.num;
+    }
+    return null;
+  };
+  const slotFeeder = (slot, ri) => {
+    const s = (slot || '').trim();
+    const mm = /^([WL])(\d+)$/.exec(s);
+    if (mm) return Number(mm[2]);
+    if (s && !/^TBD$/i.test(s)) return findByName(s, ri);
+    return null;
+  };
+
+  // Index every node by its match number, with its column and resolved feeders.
+  const byNum = new Map();
+  cols.forEach((col, ri) => col.matches.forEach((m) => {
+    if (m.num == null) return;
+    byNum.set(m.num, { ri, m, feeders: ri === 0 ? [] : [slotFeeder(m.team1, ri), slotFeeder(m.team2, ri)] });
+  }));
+
+  // Lay leaves out top-to-bottom in tree order (a depth-first walk from the
+  // roots), then place each parent at the midpoint of its feeders. This keeps
+  // the tree planar so connectors never cross.
+  const yOf = new Map();
+  let leaf = 0;
+  const layout = (num) => {
+    if (yOf.has(num)) return yOf.get(num);
+    const node = byNum.get(num);
+    if (!node) return null;
+    yOf.set(num, null); // cycle guard
+    if (node.ri === 0 || !node.feeders.length) {
+      const y = PADT + (leaf++) * UNIT; yOf.set(num, y); return y;
+    }
+    const fy = node.feeders.map((fn) => (fn != null ? layout(fn) : null)).filter((y) => y != null);
+    const y = fy.length ? fy.reduce((a, b) => a + b, 0) / fy.length : PADT + (leaf++) * UNIT;
+    yOf.set(num, y); return y;
+  };
+  const lastRi = cols.length - 1;
+  cols[lastRi].matches.forEach((m) => { if (m.num != null) layout(m.num); });
+  // Any node not reached from a root (incomplete data): drop it onto a free row.
+  cols.forEach((col) => col.matches.forEach((m) => {
+    if (m.num != null && yOf.get(m.num) == null) yOf.set(m.num, PADT + (leaf++) * UNIT);
+  }));
+
+  const totalW = cols.length * COLW;
+  let h = leaf * UNIT + PADT + 8;
 
   const nodeAt = (t, left, top, cls = '') => {
     const sc = t.s1 != null && t.s2 != null;
@@ -688,27 +712,44 @@ export function renderBracket(bracket) {
       <div class="bk-row ${w2 ? 'bk-win' : ''}"><span class="bk-team">${esc(t.team2)}</span><span class="bk-sc">${t.s2 != null ? t.s2 : ''}</span></div>
     </div>`;
   };
-  let boxes = rounds.map((r, ri) => r.matches.map((t, j) => nodeAt(t, ri * COLW + 4, ys[ri][j])).join('')).join('');
-  const heads = rounds.map((r, ri) => `<div class="bk-round-h" style="left:${ri * COLW + 4}px">${esc(r.name)}</div>`).join('');
 
-  // Third-place match: put it in the Final's column, below the Final, fed by the
-  // two losing semi-finalists (dashed connectors).
+  // Elbow connector from a feeder node's right edge to a child node's left edge.
+  const connect = (fromNum, toNum, cls = 'bk-conn') => {
+    const f = byNum.get(fromNum), t = byNum.get(toNum);
+    if (!f || !t || yOf.get(fromNum) == null || yOf.get(toNum) == null) return '';
+    const fx = f.ri * COLW + (COLW - 16), fy = yOf.get(fromNum) + BOXH / 2;
+    const tx = t.ri * COLW + 4, ty = yOf.get(toNum) + BOXH / 2;
+    const mx = (fx + tx) / 2;
+    return `<path d="M${fx} ${fy} H${mx} V${ty} H${tx}" class="${cls}"/>`;
+  };
+
+  let boxes = '', conns = '';
+  cols.forEach((col, ri) => col.matches.forEach((m) => {
+    if (m.num == null) return;
+    boxes += nodeAt(m, ri * COLW + 4, yOf.get(m.num));
+    byNum.get(m.num).feeders.forEach((fn) => { if (fn != null) conns += connect(fn, m.num); });
+  }));
+  const heads = cols.map((r, ri) => `<div class="bk-round-h" style="left:${ri * COLW + 4}px">${esc(r.name)}</div>`).join('');
+
+  // Third-place match: its own node in the Final's column, below the Final,
+  // fed by the two losing semi-finalists (dashed connectors).
   let extraHeads = '';
-  let h = totalH;
   const third = (bracket || []).find((r) => /third/i.test(r.name) && r.matches && r.matches.length);
-  const lastRi = rounds.length - 1;
-  if (third && lastRi >= 1) {
+  if (third && cols.length >= 2) {
+    const t = third.matches[0];
     const left = lastRi * COLW + 4;
-    const ty = ys[lastRi][0] + BOXH + 60;
-    boxes += nodeAt(third.matches[0], left, ty, 'bk-third');
+    const ty = h + 28;
+    boxes += nodeAt(t, left, ty, 'bk-third');
     extraHeads = `<div class="bk-round-h bk-third-h" style="left:${left}px;top:${ty - 18}px">3RD PLACE</div>`;
-    (ys[lastRi - 1] || []).forEach((sy) => {
-      const fx = (lastRi - 1) * COLW + (COLW - 16);
-      const fy = sy + BOXH / 2;
+    [t.team1, t.team2].forEach((slot) => {
+      const fn = slotFeeder(slot, lastRi + 1);
+      const f = fn != null ? byNum.get(fn) : null;
+      if (!f || yOf.get(fn) == null) return;
+      const fx = f.ri * COLW + (COLW - 16), fy = yOf.get(fn) + BOXH / 2;
       const mx = (fx + left) / 2;
       conns += `<path d="M${fx} ${fy} H${mx} V${ty + BOXH / 2} H${left}" class="bk-conn bk-conn-3"/>`;
     });
-    h = Math.max(h, ty + BOXH + 12);
+    h = ty + BOXH + 12;
   }
 
   const html = `<div class="bracket-map" style="width:${totalW}px;height:${h + HEADH}px">

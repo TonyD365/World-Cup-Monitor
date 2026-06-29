@@ -774,6 +774,7 @@ export async function fetchOpenfootballBracket(fetchImpl) {
     if (!byRound.has(m.round)) byRound.set(m.round, []);
     const sc = m.score && m.score.ft;
     byRound.get(m.round).push({
+      num: m.num != null ? Number(m.num) : null,
       team1: m.team1 || 'TBD', team2: m.team2 || 'TBD',
       s1: sc ? sc[0] : null, s2: sc ? sc[1] : null,
     });
