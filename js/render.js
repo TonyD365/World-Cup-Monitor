@@ -125,6 +125,13 @@ export function renderScoreboard(m, favs) {
         <div class="sb-name">${esc(m.away.name || m.away.abbr)} ${favStar(m.away.name || m.away.abbr)}</div>
       </div>
     </div>
+    ${(m.homeShootout != null || m.awayShootout != null) ? `
+    <div class="sb-pens" translate="no">
+      <span class="sb-pens-label">PENALTIES</span>
+      <span class="sb-pen-box">${m.homeShootout ?? 0}</span>
+      <span class="sb-pen-dash">-</span>
+      <span class="sb-pen-box">${m.awayShootout ?? 0}</span>
+    </div>` : ''}
     <div class="sb-venue">${m.venue ? '@ ' + esc(m.venue) : ''}</div>
     <div class="sb-summary" id="sb-summary" translate="no"></div>
     <div class="sb-extra" id="sb-extra" translate="no"></div>
@@ -241,9 +248,11 @@ export function renderEventLog(m, shownKeys, detail) {
   for (const ev of evs) {
     // De-dupe goals to one line per minute+team (a goal can arrive from both
     // keyEvents (with scorer) and commentary (without) — keep the richer one).
-    const key = ev.type === 'goal'
-      ? `${m.id}|goal|${ev.min}|${ev.team}`
-      : `${m.id}|${ev.min}|${ev.type}|${ev.player}|${(ev.detail || '').slice(0, 30)}`;
+    const key = ev.shootout
+      ? `${m.id}|pso|${ev.team}|${ev.penNum}|${ev.player}`
+      : ev.type === 'goal'
+        ? `${m.id}|goal|${ev.min}|${ev.team}`
+        : `${m.id}|${ev.min}|${ev.type}|${ev.player}|${(ev.detail || '').slice(0, 30)}`;
     if (shownKeys.has(key)) continue;
     shownKeys.add(key);
     appended = true;
@@ -251,7 +260,15 @@ export function renderEventLog(m, shownKeys, detail) {
     const ts = ev.min != null ? `${ev.min}'` : '';
     const icon = EVENT_ICON[ev.type] || '·';
 
-    if (PHASE_TYPES.has(ev.type)) {
+    if (ev.shootout) {
+      // Penalty-shootout kick: taker + kick number + scored/missed, both teams.
+      line.className = `log-line pen-line ${ev.scored ? 'pen-scored' : 'pen-missed'} flash`;
+      const team = ev.team ? `<span class="log-team" translate="no">[${esc(ev.team)}]</span>` : '';
+      const who = ev.player ? `<span class="log-player" translate="no">${esc(withNum(ev.player))}</span>` : '';
+      const n = ev.penNum != null ? `<span class="pen-num" translate="no">KICK #${ev.penNum}</span>` : '';
+      const res = ev.scored ? '<span class="pen-res scored">SCORED ✅</span>' : '<span class="pen-res missed">MISSED ❌</span>';
+      line.innerHTML = `<span class="pen-icon">🥅</span> <span class="log-type">PENALTY</span> ${n} ${team} ${who} ${res}`;
+    } else if (PHASE_TYPES.has(ev.type)) {
       line.className = 'log-line phase flash';
       line.innerHTML = `${icon} <span class="phase-text">${esc((ev.detail || '').toUpperCase())}</span> ${ts ? `<span class="phase-min" translate="no">${ts}</span>` : ''} ${icon}`;
     } else if (ev.type === 'goal') {
@@ -293,6 +310,7 @@ function buildPlayerMarks(events) {
     return map.get(key);
   };
   for (const e of events || []) {
+    if (e.shootout) continue; // shootout kicks aren't run-of-play goals
     if (e.type === 'goal') {
       const g = get(e.player); if (g) g.g += 1;
       const a = get(e.assist); if (a) a.a += 1;

@@ -216,12 +216,19 @@ function parseEspnLive(data) {
   const home = cs.find((c) => c.homeAway === 'home') || cs[0] || {};
   const away = cs.find((c) => c.homeAway === 'away') || cs[1] || {};
   const sc = (c) => (c && c.score != null && c.score !== '' ? Number(c.score) : null);
+  // ESPN numeric period: 1=1H, 2=2H, 3=ET1, 4=ET2, 5=penalty shootout. More
+  // reliable than the text for detecting extra time / penalties.
+  const periodNum = comp.status && comp.status.period != null ? Number(comp.status.period) : null;
+  const shoot = (c) => (c && c.shootoutScore != null && c.shootoutScore !== '' ? Number(c.shootoutScore) : null);
   return {
     status: mapEspnStatus(st.state),
     minute: espnMinute(comp.status && comp.status.displayClock),
     period: st.shortDetail || st.description || null,
+    periodNum,
     homeScore: sc(home),
     awayScore: sc(away),
+    homeShootout: shoot(home),
+    awayShootout: shoot(away),
   };
 }
 
@@ -341,6 +348,7 @@ function clockFrac(c) {
 //   "begins" boundaries -> minute + 0.001 (just before that minute's plays)
 //   "ends"   boundaries -> minute + 0.99  (just after that minute's stoppage)
 function eventSortPos(ev) {
+  if (ev.shootout) return 100001; // individual shootout kicks, after the marker
   if (ev.type === 'half') {
     const d = (ev.detail || '').toLowerCase();
     const base = ev.minF != null ? Math.floor(ev.minF) : null;
@@ -412,13 +420,25 @@ function parseEspnEvents(data) {
       else if (/(fourth|4th) official|minutes of (added|stoppage) time|added time will be|stoppage time will be/i.test(blob)) type = 'addedtime';
       else if (/half[\s-]?time|(first|second) half (begins|ends)|full[\s-]?time|match (begins|ended)|end of (the )?(first|second|1st|2nd) half|kick[\s-]?off|extra[\s-]?time|penalty shootout|penalties begin/i.test(blob)) type = 'half';
     }
+    // Penalty shootout kick (distinct from an in-run-of-play penalty). ESPN tags
+    // these "Penalty - Shootout" / mentions the shootout in the text.
+    const blob = `${typeTxt || ''} ${detail || ''}`;
+    const shootout = /shoot[\s-]?out|penalty shoot/i.test(blob);
+    let scored;
+    if (shootout) {
+      const missed = /miss|saved|blocked|over the bar|wide|hits the (post|bar)|off the (post|bar)|denied/i.test(blob);
+      scored = !missed && (type === 'goal' || /scores|converts|- scored|\bscored\b|makes no mistake|sends.*wrong way/i.test(blob));
+    }
     const min = clockToMin(clock);
-    const key = `${min}|${type}|${player}|${(detail || '').slice(0, 40)}`;
+    const key = shootout
+      ? `pso|${teamId}|${player}|${(detail || '').slice(0, 40)}`
+      : `${min}|${type}|${player}|${(detail || '').slice(0, 40)}`;
     if (seen.has(key)) return;
     seen.add(key);
     out.push({
       min, minF: clockFrac(clock), type, team: teamLabel(sides, teamId), player, assist,
       detail: detail || typeTxt || '', source: 'espn',
+      shootout, scored,
     });
   };
 
@@ -456,6 +476,14 @@ function parseEspnEvents(data) {
     .sort((A, B) => (eventSortPos(A.e) - eventSortPos(B.e)) || (A.i - B.i))
     .forEach((x, i) => { x.e._ord = i; });
   out.sort((a, b) => a._ord - b._ord);
+  // Number each team's shootout kicks in order (1st, 2nd, ... penalty).
+  const penCount = {};
+  for (const e of out) {
+    if (!e.shootout) continue;
+    const k = e.team || '?';
+    penCount[k] = (penCount[k] || 0) + 1;
+    e.penNum = penCount[k];
+  }
   return out;
 }
 

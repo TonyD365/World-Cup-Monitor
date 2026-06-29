@@ -63,14 +63,24 @@ function clockText(m) {
   if (m.status === 'ft') return 'FULL TIME';
   const period = String(m.period || '');
   const p = period.toLowerCase();
-  if (/\bht\b|half[\s-]?time/.test(p) && !/\d/.test(p)) return 'HALF TIME';
+  const pn = m.periodNum; // 1=1H, 2=2H, 3=ET1, 4=ET2, 5=penalties
+  // Are we in extra time? Trust ESPN's numeric period, fall back to the text or
+  // a clock past 90'.
+  const inET = pn >= 3 || /extra|\bet\b|a\.?e\.?t/.test(p) || (m.minute != null && m.minute > 90);
+  // Penalty shootout (live): the score line carries the running tally.
+  if (pn === 5 || /penalt|shoot[\s-]?out|\bpso\b|spot[\s-]?kick/.test(p)) return 'PENALTIES';
+  // Half time — distinguish the break inside extra time.
+  if (/\bht\b|half[\s-]?time|halftime/.test(p) && !/\d/.test(p)) return inET ? 'HALF TIME (ET)' : 'HALF TIME';
   // Hydration/drinks break (from commentary), or a status that flags it.
   if (inHydrationBreak(m) || /hydration|cooling|drinks? break/.test(p)) return 'HYDRATION BREAK';
   const stop = /(\d+)\s*'?\s*\+\s*(\d+)/.exec(period);
   if (stop) {
-    // Stoppage time with ticking seconds, e.g. "45:00 (+2:34)". Seed the elapsed
-    // from the announced added minutes, then tick continuously.
-    const base = parseInt(stop[1], 10) >= 46 ? 90 : 45;
+    // Stoppage time with ticking seconds, e.g. "45:00 (+2:34)" or, in extra
+    // time, "105:00 (+1:20)". Seed the elapsed from the announced added minutes,
+    // then tick continuously. The base is the nominal end of the current half:
+    // 45 (1H), 90 (2H), 105 (ET1), 120 (ET2).
+    const at = parseInt(stop[1], 10);
+    const base = at >= 106 ? 120 : at >= 91 ? 105 : at >= 46 ? 90 : 45;
     const n = parseInt(stop[2], 10) || 0;
     const sa = state.stopAnchor;
     if (sa.id !== m.id || sa.base !== base) {
@@ -342,8 +352,11 @@ async function poll() {
         if (L.status) m.status = L.status;
         if (L.minute != null) m.minute = L.minute; // don't clobber with null
         if (L.period) m.period = L.period;
+        if (L.periodNum != null) m.periodNum = L.periodNum;
         if (L.homeScore != null) m.home.score = L.homeScore;
         if (L.awayScore != null) m.away.score = L.awayScore;
+        m.homeShootout = L.homeShootout; // null clears once the shootout is over
+        m.awayShootout = L.awayShootout;
       }
       // Group table: ESPN summary rarely includes it, so fall back to the table
       // computed from openfootball results, filtered to this match's group.
