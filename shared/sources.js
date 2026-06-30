@@ -83,12 +83,13 @@ function clockToMin(c) {
 function teamSides(data) {
   const comp = data.header && data.header.competitions && data.header.competitions[0];
   const cs = (comp && comp.competitors) || [];
-  const r = { homeId: '', awayId: '', homeAbbr: '', awayAbbr: '' };
+  const r = { homeId: '', awayId: '', homeAbbr: '', awayAbbr: '', homeName: '', awayName: '' };
   for (const c of cs) {
     const id = String((c.team && c.team.id) || '');
     const ab = (c.team && (c.team.abbreviation || c.team.displayName)) || '';
-    if (c.homeAway === 'home') { r.homeId = id; r.homeAbbr = ab; }
-    else if (c.homeAway === 'away') { r.awayId = id; r.awayAbbr = ab; }
+    const nm = (c.team && (c.team.displayName || c.team.name || c.team.shortDisplayName)) || '';
+    if (c.homeAway === 'home') { r.homeId = id; r.homeAbbr = ab; r.homeName = nm; }
+    else if (c.homeAway === 'away') { r.awayId = id; r.awayAbbr = ab; r.awayName = nm; }
   }
   return r;
 }
@@ -405,11 +406,35 @@ export async function fetchEspnPredictor(fetchImpl, eventId) {
   return { home: hr, away: ar, draw: tie != null ? Math.round(tie) : Math.max(0, 100 - hr - ar) };
 }
 
+// Pull "<Player> (<Team>)" out of shootout commentary. The FIRST such pair is
+// the taker — a "saved" line names the goalkeeper second. The player is matched
+// as a run of capitalised words (plus lowercase name particles like "van"), so
+// the leading sentence ("Penalty missed. ") and the score notation ("1(1)",
+// whose parenthesis holds a digit) are excluded.
+const KICKER_RE = /([\p{Lu}][\p{L}'’.\-]*(?:\s+(?:[\p{Lu}][\p{L}'’.\-]*|van|von|de|der|den|da|dos|das|del|di|du|el|al|bin|ben|le|la|of|the))*)\s*\(([\p{L}][^)]*)\)/u;
+function extractKicker(text) {
+  const m = KICKER_RE.exec(text || '');
+  if (!m) return null;
+  return { player: m[1].trim(), team: (m[2] || '').trim() };
+}
+
+// Map a team name from commentary text ("Morocco") to its abbreviation.
+function teamAbbrByName(sides, name) {
+  const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const n = norm(name);
+  if (!n) return '';
+  if (norm(sides.homeName) === n) return sides.homeAbbr || 'H';
+  if (norm(sides.awayName) === n) return sides.awayAbbr || 'A';
+  if (norm(sides.homeName) && (norm(sides.homeName).includes(n) || n.includes(norm(sides.homeName)))) return sides.homeAbbr || 'H';
+  if (norm(sides.awayName) && (norm(sides.awayName).includes(n) || n.includes(norm(sides.awayName)))) return sides.awayAbbr || 'A';
+  return '';
+}
+
 function parseEspnEvents(data) {
   const sides = teamSides(data);
   const out = [];
   const seen = new Set();
-  const add = (clock, typeTxt, teamId, player, detail, assist = '') => {
+  const add = (clock, typeTxt, teamId, player, detail, assist = '', periodNum = null, seq = 0) => {
     let type = espnEventType(typeTxt || detail || '');
     // Boundary / added-time / break phrases often live in the text, not the play
     // type. Only override generic ('info') events so a goal that merely mentions
@@ -420,52 +445,74 @@ function parseEspnEvents(data) {
       else if (/(fourth|4th) official|minutes of (added|stoppage) time|added time will be|stoppage time will be/i.test(blob)) type = 'addedtime';
       else if (/half[\s-]?time|(first|second) half (begins|ends)|full[\s-]?time|match (begins|ended)|end of (the )?(first|second|1st|2nd) half|kick[\s-]?off|extra[\s-]?time|penalty shootout|penalties begin/i.test(blob)) type = 'half';
     }
-    // Penalty shootout kick (distinct from an in-run-of-play penalty). ESPN tags
-    // these "Penalty - Shootout" / mentions the shootout in the text.
+    // Penalty shootout kick (distinct from an in-run-of-play penalty). ESPN
+    // reports it as period 5; the shootout-score notation "1(1)" and explicit
+    // "shootout" wording are fallbacks when the period is absent.
     const blob = `${typeTxt || ''} ${detail || ''}`;
-    const shootout = /shoot[\s-]?out|penalty shoot/i.test(blob);
+    const shootout = periodNum >= 5
+      || /shoot[\s-]?out|penalty shoot/i.test(blob)
+      || /\b\d+\s*\(\d+\)/.test(blob);
+    let team = teamLabel(sides, teamId);
     let scored;
     if (shootout) {
-      const missed = /miss|saved|blocked|over the bar|wide|hits the (post|bar)|off the (post|bar)|denied/i.test(blob);
-      scored = !missed && (type === 'goal' || /scores|converts|- scored|\bscored\b|makes no mistake|sends.*wrong way/i.test(blob));
+      const missed = /miss|saved|blocked|over the bar|wide|hits the (post|bar)|off the (post|bar)|denied|no goal/i.test(blob);
+      scored = !missed && (type === 'goal' || /scores|converts|- scored|\bscored\b|makes no mistake|sends.*wrong way|bottom (left|right)|top (left|right)|into the (back of the )?net/i.test(blob));
+      // The structured scorer/team is usually empty for shootout plays — recover
+      // them from the commentary sentence ("<Player> (<Team>) converts/misses…").
+      if (!player || !team) {
+        const k = extractKicker(detail || '');
+        if (k) {
+          if (!player) player = k.player;
+          if (!team) team = teamAbbrByName(sides, k.team) || k.team;
+        }
+      }
     }
     const min = clockToMin(clock);
     const key = shootout
-      ? `pso|${teamId}|${player}|${(detail || '').slice(0, 40)}`
+      ? `pso|${team}|${player}|${scored}`
       : `${min}|${type}|${player}|${(detail || '').slice(0, 40)}`;
     if (seen.has(key)) return;
     seen.add(key);
     out.push({
-      min, minF: clockFrac(clock), type, team: teamLabel(sides, teamId), player, assist,
+      min, minF: clockFrac(clock), type, team, player, assist,
       detail: detail || typeTxt || '', source: 'espn',
-      shootout, scored,
+      shootout, scored, _seq: Number(seq) || 0,
     });
   };
 
   // keyEvents: structured goals/cards/subs (use boolean flags when present).
   for (const k of data.keyEvents || []) {
     try {
+      const kp = (k.period && k.period.number) || null;
+      const ktype = (k.type && k.type.text) || '';
+      // Shootout kicks come from the richer commentary instead — keyEvents
+      // entries for them are skeletal (no scorer/team), so skip them here.
+      if (kp >= 5 || /shoot[\s-]?out|penalty shoot/i.test(ktype)) continue;
       const parts = k.participants || [];
       const player = (parts[0] && parts[0].athlete && parts[0].athlete.displayName) || '';
       const assist = (parts[1] && parts[1].athlete && parts[1].athlete.displayName) || '';
-      let typeTxt = (k.type && k.type.text) || '';
+      let typeTxt = ktype;
       if (k.scoringPlay || k.ownGoal) typeTxt = 'goal';
       else if (k.redCard) typeTxt = 'red card';
       else if (k.yellowCard) typeTxt = 'yellow card';
       else if (k.substitution) typeTxt = 'substitution';
-      add(k.clock, typeTxt, k.team && k.team.id, player, k.text || (k.type && k.type.text) || '', assist);
+      add(k.clock, typeTxt, k.team && k.team.id, player, k.text || ktype || '', assist, kp, k.sequence);
     } catch (_) {
       /* skip */
     }
   }
 
-  // commentary: full play-by-play (fouls, corners, throw-ins, offsides, …).
+  // commentary: full play-by-play (fouls, corners, throw-ins, offsides, plus the
+  // penalty shootout — the richest source of taker/team/result for each kick).
   for (const c of data.commentary || []) {
     try {
       const play = c.play || {};
       const typeTxt = (play.type && play.type.text) || c.text || '';
       const teamId = (play.team && play.team.id) || '';
-      add(c.time || play.clock, typeTxt, teamId, '', c.text || (play.type && play.type.text) || '');
+      const pp = (play.period && play.period.number) || null;
+      const parts = play.participants || [];
+      const player = (parts[0] && parts[0].athlete && parts[0].athlete.displayName) || '';
+      add(c.time || play.clock, typeTxt, teamId, player, c.text || (play.type && play.type.text) || '', '', pp, play.sequence || c.sequence);
     } catch (_) {
       /* skip */
     }
@@ -473,7 +520,10 @@ function parseEspnEvents(data) {
 
   out
     .map((e, i) => ({ e, i }))
-    .sort((A, B) => (eventSortPos(A.e) - eventSortPos(B.e)) || (A.i - B.i))
+    .sort((A, B) => (eventSortPos(A.e) - eventSortPos(B.e))
+      // Shootout kicks share minute 120; order them by ESPN's play sequence so
+      // the kick numbering comes out chronological regardless of array order.
+      || ((A.e.shootout && B.e.shootout && (A.e._seq - B.e._seq)) || (A.i - B.i)))
     .forEach((x, i) => { x.e._ord = i; });
   out.sort((a, b) => a._ord - b._ord);
   // Number each team's shootout kicks in order (1st, 2nd, ... penalty).

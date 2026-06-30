@@ -269,14 +269,13 @@ select#match-select:focus { box-shadow: 0 0 8px var(--green-dim); }
   50% { transform: perspective(220px) rotateX(90deg); color: var(--amber); }
   100% { transform: perspective(220px) rotateX(0deg); }
 }
-/* Penalty shootout: two mini score boxes under the main score. */
-.sb-pens {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  margin-top: 10px;
-}
-.sb-pens-label { color: var(--amber); font-size: 12px; letter-spacing: 2px; margin-right: 4px; }
+/* Penalty shootout: label on top, two mini score boxes centered under the
+   main score (so they line up with the big digits). */
+.sb-pens { margin-top: 10px; text-align: center; }
+.sb-pens-label { color: var(--amber); font-size: 12px; letter-spacing: 2px; margin-bottom: 5px; }
+.sb-pens-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .sb-pen-box {
-  display: inline-block; min-width: 1.1em; text-align: center;
+  display: inline-block; min-width: 0.78em; text-align: center;
   font-size: 24px; color: var(--amber); text-shadow: 0 0 10px var(--amber);
   background: #1a1203; border: 1px solid var(--amber); border-radius: 5px; padding: 2px 12px;
 }

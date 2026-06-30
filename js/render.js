@@ -127,10 +127,12 @@ export function renderScoreboard(m, favs) {
     </div>
     ${(m.homeShootout != null || m.awayShootout != null) ? `
     <div class="sb-pens" translate="no">
-      <span class="sb-pens-label">PENALTIES</span>
-      <span class="sb-pen-box">${m.homeShootout ?? 0}</span>
-      <span class="sb-pen-dash">-</span>
-      <span class="sb-pen-box">${m.awayShootout ?? 0}</span>
+      <div class="sb-pens-label">PENALTIES</div>
+      <div class="sb-pens-row">
+        <span class="sb-pen-box">${m.homeShootout ?? 0}</span>
+        <span class="sb-pen-dash">-</span>
+        <span class="sb-pen-box">${m.awayShootout ?? 0}</span>
+      </div>
     </div>` : ''}
     <div class="sb-venue">${m.venue ? '@ ' + esc(m.venue) : ''}</div>
     <div class="sb-summary" id="sb-summary" translate="no"></div>
