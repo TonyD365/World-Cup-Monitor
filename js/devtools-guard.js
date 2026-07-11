@@ -15,6 +15,20 @@
 // themed deterrent.
 
 (function () {
+  // Skip everything on mobile/tablet: there are no dev tools to catch, and the
+  // on-screen keyboard / browser chrome resize the viewport enough to false-trip
+  // the size heuristic and wrongly wipe the page. (iPadOS reports as "Macintosh"
+  // but has a touch screen, so the maxTouchPoints check catches iPads too.)
+  const isMobile = (() => {
+    const uaData = navigator.userAgentData;
+    if (uaData && typeof uaData.mobile === 'boolean') return uaData.mobile;
+    const ua = navigator.userAgent || '';
+    if (/Android|iPhone|iPad|iPod|IEMobile|BlackBerry|Opera Mini|Mobile/i.test(ua)) return true;
+    if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return true; // iPadOS
+    return false;
+  })();
+  if (isMobile) return;
+
   const THRESHOLD = 160;
   let wiped = false;
   let timer = null;
